@@ -4,17 +4,17 @@ import {
   type BirthInput, type Chart,
 } from './fortune';
 import {
-  DAY_GAN_TEXT, STRONGEST_TEXT, YEAR_STAR_TEXT, STAGE_TEXT,
+  DAY_GAN_TEXT, DAY_GAN_SHORT, STRONGEST_TEXT, YEAR_STAR_TEXT, STAGE_TEXT,
   EQUIPMENT, PREFIX_TITLE, POSTFIX_TITLE, ELEMENT_COLOR, buildPrompt, seasonOf, SEASON_JA,
 } from './texts';
 import { silhouetteSvg } from './silhouette';
-import { loadImage, composeSeal, canvasToDataUrl, exportSeal } from './seal';
+import { loadImage, loadImageFromUrl, composeSeal, composeExplainedSeal, canvasToDataUrl, exportSeal } from './seal';
 import {
   loadEntries, addEntry, updateEntry, getEntry,
   type Entry,
 } from './store';
 
-const APP_VERSION = '0.1.2';
+const APP_VERSION = '0.1.3';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 interface Person {
@@ -255,7 +255,8 @@ function renderReading(person: Person, opts: ReadingOpts): string {
     <input type="file" id="imageFile" accept="image/*">
     <div id="registerMsg"></div>
     ${opts.image ? `<div class="actions">
-      <button class="primary" id="exportBtn">シールを書き出す（共有／ダウンロード）</button>
+      <button class="primary" id="exportBtn">シール単体を書き出す（共有／ダウンロード）</button>
+      <button id="exportExplainedBtn">解説つきで書き出す（共有／ダウンロード）</button>
       ${opts.onSent ? '<button id="sentBtn">贈ったことにする</button>' : ''}
     </div>` : ''}
   </section>`;
@@ -292,6 +293,30 @@ function bindReading(person: Person, opts: ReadingOpts) {
     }
   });
   app.querySelector('#exportBtn')?.addEventListener('click', () => { opts.onExport?.(); });
+  app.querySelector('#exportExplainedBtn')?.addEventListener('click', async () => {
+    if (!opts.image) return;
+    const msg = app.querySelector('#registerMsg');
+    try {
+      const sealImg = await loadImageFromUrl(opts.image);
+      const spec = decideCharacter(chart);
+      const f = yearFortune(chart, new Date().getFullYear());
+      const canvas = composeExplainedSeal(sealImg, {
+        personality: [DAY_GAN_SHORT[chart.dayGan], STRONGEST_TEXT[chart.strongest]],
+        fortuneHeading: `${f.year}年の運勢（${f.stage}）`,
+        fortuneBody: [YEAR_STAR_TEXT[f.shiShen], STAGE_TEXT[f.stage]],
+        equipLines: [
+          ...[spec.mainEq, ...spec.subEq].map((p) =>
+            `${EQUIPMENT[p.shiShen].name}（${p.shiShen}）：${EQUIPMENT[p.shiShen].meaning}`),
+          `お守りのリボンチャーム：足りない五行「${spec.charmElement}」を補い、バランスを整えるお守りです`,
+        ],
+        footer: '命式シール（仮）― 四柱推命をもとにした贈り物シールです',
+        mainColor: chart.strongestElement,
+      });
+      await exportSeal(canvasToDataUrl(canvas), `seal-explained-${person.nickname}.jpg`);
+    } catch {
+      if (msg) msg.innerHTML = '<p class="error">解説つき画像を作れませんでした。もう一度お試しください。</p>';
+    }
+  });
   app.querySelector('#sentBtn')?.addEventListener('click', () => { opts.onSent?.(); });
 }
 

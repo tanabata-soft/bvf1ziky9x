@@ -203,6 +203,132 @@ export function composeSeal(img: HTMLImageElement, name: SealName): HTMLCanvasEl
   return canvas;
 }
 
+/** dataURL など URL から画像を読み込む（解説つき合成で完成シールを再利用するため） */
+export function loadImageFromUrl(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('画像を読み込めませんでした'));
+    img.src = src;
+  });
+}
+
+export interface ExplainedInfo {
+  personality: string[]; // 性格ひとこと（段落ごと）
+  fortuneHeading: string; // 例: 2026年の運勢（吉）
+  fortuneBody: string[]; // 運勢の短文（段落ごと）
+  equipLines: string[]; // 装備の意味（1行=1装備、折り返し可）
+  footer: string;
+  mainColor: Element;
+}
+
+const FONT_STACK = '"Hiragino Maru Gothic ProN", "Hiragino Sans", "Noto Sans JP", sans-serif';
+
+/** maxWidth に収まるよう折り返す。行頭の句読点・括弧閉じは前の行にぶら下げる（禁則処理） */
+const NO_LINE_START = '、。・：；！？）」』】〉》。';
+function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const lines: string[] = [];
+  let cur = '';
+  for (const ch of text) {
+    if (ctx.measureText(cur + ch).width > maxWidth && cur) {
+      if (NO_LINE_START.includes(ch)) {
+        cur += ch; // ぶら下げ：少しはみ出しても行頭には置かない
+      } else {
+        lines.push(cur);
+        cur = ch;
+      }
+    } else {
+      cur += ch;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [''];
+}
+
+/**
+ * 解説つき書き出し（v0.1.3）: 上部に完成シール、下部に解説パネルの縦長1枚。
+ * 文字はすべてアプリ側で描く。生年月日は入れない。
+ */
+export function composeExplainedSeal(sealImg: HTMLImageElement, info: ExplainedInfo): HTMLCanvasElement {
+  const W = SIZE;
+  const PAD = 60;
+  const TEXT_W = W - PAD * 2;
+  const HEAD_FONT = `700 37px ${FONT_STACK}`;
+  const BODY_FONT = `400 31px ${FONT_STACK}`;
+  const BODY_LH = 50;
+  const HEAD_H = 56;
+
+  interface Section { heading: string; lines: string[] }
+  // 計測用コンテキストで折り返しを先に確定する
+  const measure = document.createElement('canvas').getContext('2d')!;
+  const build = (heading: string, paras: string[]): Section => {
+    measure.font = BODY_FONT;
+    return { heading, lines: paras.flatMap((p) => wrapLines(measure, p, TEXT_W)) };
+  };
+  const sections: Section[] = [
+    build('性格', info.personality),
+    build(info.fortuneHeading, info.fortuneBody),
+    build('装備の意味', info.equipLines),
+  ];
+  const TOP_PAD = 46;
+  const SECTION_GAP = 36;
+  const FOOTER_H = 66;
+  const panelH = TOP_PAD
+    + sections.reduce((s, sec) => s + HEAD_H + sec.lines.length * BODY_LH, 0)
+    + SECTION_GAP * (sections.length - 1)
+    + FOOTER_H + 30;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = SIZE + panelH;
+  const ctx = canvas.getContext('2d')!;
+
+  // 上部: 完成シール（そのまま全体を描く）
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, canvas.height);
+  ctx.drawImage(sealImg, 0, 0, W, SIZE);
+
+  // 下部: 解説パネル
+  const py = SIZE;
+  ctx.fillStyle = '#fffdf8';
+  ctx.fillRect(0, py, W, panelH);
+  ctx.fillStyle = ELEMENT_COLOR[info.mainColor];
+  ctx.fillRect(0, py, W, 10);
+
+  let y = py + TOP_PAD;
+  sections.forEach((sec, i) => {
+    if (i > 0) y += SECTION_GAP;
+    // 見出し（色丸＋太字）
+    ctx.fillStyle = ELEMENT_COLOR[info.mainColor];
+    ctx.beginPath();
+    ctx.arc(PAD + 13, y + 22, 13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = HEAD_FONT;
+    ctx.fillStyle = '#33333f';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(sec.heading, PAD + 42, y + 36);
+    y += HEAD_H;
+    // 本文
+    ctx.font = BODY_FONT;
+    ctx.fillStyle = '#3d3d4d';
+    for (const line of sec.lines) {
+      ctx.fillText(line, PAD, y + 34);
+      y += BODY_LH;
+    }
+  });
+
+  // フッターと下端のプリズム帯
+  ctx.font = `400 24px ${FONT_STACK}`;
+  ctx.fillStyle = '#8a8aa0';
+  ctx.textAlign = 'center';
+  ctx.fillText(info.footer, W / 2, py + panelH - 28);
+  ctx.fillStyle = prismGradient(ctx);
+  ctx.fillRect(0, py + panelH - 12, W, 12);
+
+  return canvas;
+}
+
 export function canvasToDataUrl(canvas: HTMLCanvasElement): string {
   return canvas.toDataURL('image/jpeg', 0.88);
 }
