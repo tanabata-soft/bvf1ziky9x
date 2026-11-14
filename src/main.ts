@@ -8,13 +8,13 @@ import {
   EQUIPMENT, PREFIX_TITLE, POSTFIX_TITLE, ELEMENT_COLOR, buildPrompt, seasonOf, SEASON_JA,
 } from './texts';
 import { silhouetteSvg } from './silhouette';
-import { loadSquareImage, composeSeal, canvasToDataUrl, exportSeal } from './seal';
+import { loadImage, composeSeal, canvasToDataUrl, exportSeal } from './seal';
 import {
   loadEntries, addEntry, updateEntry, getEntry,
   type Entry,
 } from './store';
 
-const APP_VERSION = '0.1.0';
+const APP_VERSION = '0.1.1';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 interface Person {
@@ -242,7 +242,7 @@ function renderReading(person: Person, opts: ReadingOpts): string {
 
   <section class="card">
     <h2>画像を登録してシールを完成させる</h2>
-    <p class="small">生成した画像を選ぶと、中央でトリミングして名前帯とレア度の星を合成します。</p>
+    <p class="small">生成した画像を選ぶと、絵全体が切れずに収まる形で名前帯とレア度の星を合成します。</p>
     <input type="file" id="imageFile" accept="image/*">
     <div id="registerMsg"></div>
     ${opts.image ? `<div class="actions">
@@ -269,7 +269,7 @@ function bindReading(person: Person, opts: ReadingOpts) {
     if (!file) return;
     const msg = app.querySelector('#registerMsg')!;
     try {
-      const img = await loadSquareImage(file);
+      const img = await loadImage(file);
       const canvas = composeSeal(img, {
         prefix: dn.prefix, nickname: person.nickname, postfix: dn.postfix,
         stars: rarity.stars, mainColor: chart.strongestElement,
