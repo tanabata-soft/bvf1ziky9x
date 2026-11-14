@@ -2,7 +2,10 @@
 // v0.1.1: 絵を切らない「はめ込み（contain）」方式。名前帯を細くし、絵の面積を最大化。
 // v0.1.2: レア度は星で出さず、枠・ホロの「派手さ」3段階で表す（オーナー決定 2026-11-15）。
 //   ふつう＝細めの色枠・ホロ控えめ／キラ＝プリズム枠・星屑／大当たり＝金色の太枠・強いプリズム・枠の装飾模様。
+// v0.1.5: 名前帯は2段をやめ、プレフィックス＋ニックネームを空白なしでつなげた1行表示
+//   （オーナー決定 2026-11-15）。プレフィックスは少し小さめの字で同じ行に並べる。
 import { ELEMENT_COLOR } from './texts';
+import { displayNameSegments, type NameSegmentKind } from './name';
 import type { Element, GlamourTier } from './fortune';
 
 export interface SealName {
@@ -14,8 +17,8 @@ export interface SealName {
 }
 
 const SIZE = 1080;
-// 名前帯：上部に細く（プレフィックス小＋名前大の2段）
-const BAND_H = 104;
+// 名前帯：上部に細く（プレフィックス＋ニックネームを1行で連結。帯を詰めて絵の領域を広げる）
+const BAND_H = 88;
 
 // 段階ごとの枠まわりの寸法（outer=外枠の外側、inner=内側の白地の開始位置。差が枠の太さ）
 const FRAME: Record<GlamourTier, { outer: number; inner: number }> = {
@@ -191,13 +194,36 @@ export function composeSeal(img: HTMLImageElement, name: SealName): HTMLCanvasEl
     ctx.fillStyle = goldGradient(ctx);
     ctx.fillRect(IN, IN + BAND_H - 6, IN_SIZE, 6);
   }
+  // 1行表示：プレフィックスは少し小さめ、ニックネームは大きめ、同じ行に空白なしで連結。
+  // 全体が帯の幅に収まらない場合は、比率を保ったまま全体を自動縮小する。
+  const NAME_FONT = '"Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif';
+  const BASE_SIZE: Record<NameSegmentKind, number> = { prefix: 38, nickname: 56, postfix: 34 };
+  const WEIGHT: Record<NameSegmentKind, number> = { prefix: 500, nickname: 700, postfix: 500 };
+  const fontFor = (kind: NameSegmentKind, scale: number) =>
+    `${WEIGHT[kind]} ${Math.max(10, Math.round(BASE_SIZE[kind] * scale))}px ${NAME_FONT}`;
+  const segs = displayNameSegments(name.prefix, name.nickname, name.postfix);
+  const measureAll = (scale: number) => segs.map((s) => {
+    ctx.font = fontFor(s.kind, scale);
+    return ctx.measureText(s.text).width;
+  });
+  const MAX_W = IN_SIZE - 40;
+  let nameScale = 1;
+  let segWidths = measureAll(nameScale);
+  let totalW = segWidths.reduce((a, b) => a + b, 0);
+  if (totalW > MAX_W) {
+    nameScale = MAX_W / totalW;
+    segWidths = measureAll(nameScale);
+    totalW = segWidths.reduce((a, b) => a + b, 0);
+  }
   ctx.fillStyle = 'rgba(255,255,255,0.92)';
-  ctx.textAlign = 'center';
-  ctx.font = '500 30px "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif';
-  ctx.fillText(name.prefix, SIZE / 2, IN + 42);
-  ctx.font = '700 56px "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif';
-  const mainLine = name.postfix ? `${name.nickname}・${name.postfix}` : name.nickname;
-  ctx.fillText(mainLine, SIZE / 2, IN + BAND_H - 12, IN_SIZE - 40);
+  ctx.textAlign = 'left';
+  const baseline = IN + BAND_H / 2 + BASE_SIZE.nickname * nameScale * 0.36;
+  let cursorX = (SIZE - totalW) / 2;
+  segs.forEach((s, i) => {
+    ctx.font = fontFor(s.kind, nameScale);
+    ctx.fillText(s.text, cursorX, baseline);
+    cursorX += segWidths[i];
+  });
   ctx.restore();
 
   return canvas;

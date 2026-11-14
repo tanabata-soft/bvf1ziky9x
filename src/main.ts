@@ -8,13 +8,14 @@ import {
   EQUIPMENT, PREFIX_TITLE, POSTFIX_TITLE, ELEMENT_COLOR, buildPrompt, seasonOf, SEASON_JA,
 } from './texts';
 import { silhouetteSvg } from './silhouette';
+import { buildDisplayName } from './name';
 import { loadImage, loadImageFromUrl, composeSeal, composeExplainedSeal, canvasToDataUrl, exportSeal } from './seal';
 import {
   loadEntries, addEntry, updateEntry, getEntry,
   type Entry,
 } from './store';
 
-const APP_VERSION = '0.1.4';
+const APP_VERSION = '0.1.5';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 interface Person {
@@ -76,8 +77,9 @@ function flashCopyResult(btn: HTMLButtonElement, ok: boolean): void {
 function displayName(nickname: string, chart: Chart, showPostfix: boolean): { prefix: string; postfix: string; full: string } {
   const prefix = PREFIX_TITLE[chart.strongest];
   const postfix = POSTFIX_TITLE[chart.dayGan];
-  // 基本形は「プレフィックス＋ニックネーム」。ポストフィックスは任意（オーナー決定 2026-11-15）
-  return { prefix, postfix, full: showPostfix ? `${prefix} ${nickname}・${postfix}` : `${prefix} ${nickname}` };
+  // 基本形は「プレフィックス＋ニックネーム」を空白なしでつなげた1行。ポストフィックスは任意
+  // （オーナー決定 2026-11-15）。組み立ては共通関数 buildDisplayName に寄せる
+  return { prefix, postfix, full: buildDisplayName(prefix, nickname, showPostfix ? postfix : '') };
 }
 
 function headerHtml(): string {
@@ -228,8 +230,7 @@ function renderReading(person: Person, opts: ReadingOpts): string {
 
   return `
   <section class="card result-head">
-    <div class="display-name"><span class="prefix">${esc(dn.prefix)}</span>
-    <span class="main-name">${esc(person.nickname)}${opts.showPostfix ? `<span class="postfix">・${esc(dn.postfix)}</span>` : ''}</span></div>
+    <div class="display-name"><span class="prefix">${esc(dn.prefix)}</span><span class="main-name">${esc(person.nickname)}${opts.showPostfix ? `<span class="postfix">・${esc(dn.postfix)}</span>` : ''}</span></div>
     <label class="check small"><input type="checkbox" id="postfixToggle" ${opts.showPostfix ? 'checked' : ''}> 後ろの称号「・${esc(dn.postfix)}」も付ける（基本は付けません）</label>
     ${opts.image ? '<p class="small">※ 完成済みシールへの反映は、画像を登録し直したときに行われます。</p>' : ''}
     <p class="small">形態：${spec.form} ／ レア度：<span class="stars">${'★'.repeat(rarity.stars)}${'☆'.repeat(5 - rarity.stars)}</span>（シールでは星ではなく「${GLAMOUR_LABEL[tier]}」の枠の派手さで表します）${opts.status ? ` ／ 状態：${opts.status === 'waiting' ? '画像待ち' : opts.status === 'done' ? '完成' : '贈った'}` : ''}</p>
@@ -443,7 +444,7 @@ function renderList() {
     return `<article class="seal-card" data-open="${e.id}">
       <div class="seal-thumb">${visual}</div>
       <div class="seal-meta">
-        <div class="seal-name"><span class="small">${esc(dn.prefix)}</span><br>${esc(e.nickname)}${showPostfix ? `<span class="small">・${esc(dn.postfix)}</span>` : ''}</div>
+        <div class="seal-name"><span class="name-prefix">${esc(dn.prefix)}</span>${esc(e.nickname)}${showPostfix ? `<span class="name-postfix">・${esc(dn.postfix)}</span>` : ''}</div>
         <span class="badge badge-${e.status}">${e.status === 'waiting' ? '画像待ち' : e.status === 'done' ? '完成' : '贈った'}</span>
       </div>
     </article>`;
