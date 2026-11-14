@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  shiShenOf, computeChart, decideCharacter, decideForm, rarityOf, yearFortune,
+  shiShenOf, computeChart, decideCharacter, decideForm, rarityOf, yearFortune, glamourTierOf,
 } from '../src/fortune';
 import { buildPrompt } from '../src/texts';
 
@@ -71,6 +71,23 @@ describe('形態5型の決定ルール（実例日付）', () => {
   it('道具型（印が最強）', () => { expect(at(1980, 1, 6)).toBe('道具型'); });
   it('精霊型（身弱）', () => { expect(at(1980, 2, 11)).toBe('精霊型'); });
   it('獣型（最強の星が日支本気由来）', () => { expect(at(1980, 2, 13)).toBe('獣型'); });
+});
+
+describe('レア度の派手さ段階（オーナー決定 2026-11-15：シールには星を出さない）', () => {
+  it('星1〜2=ふつう／3〜4=キラ／5=大当たり', () => {
+    expect(glamourTierOf(1)).toBe('normal');
+    expect(glamourTierOf(2)).toBe('normal');
+    expect(glamourTierOf(3)).toBe('kira');
+    expect(glamourTierOf(4)).toBe('kira');
+    expect(glamourTierOf(5)).toBe('jackpot');
+  });
+  it('呪文の背景のキラキラ表現が段階で出し分けられる', () => {
+    const chart = computeChart({ y: 1917, m: 7, d: 22, hour: null, minute: 0 });
+    const spec = decideCharacter(chart);
+    expect(buildPrompt(chart, spec, 1).prompt).toContain('softly sparkling');
+    expect(buildPrompt(chart, spec, 4).prompt).toContain('sparkling stardust');
+    expect(buildPrompt(chart, spec, 5).prompt).toContain('extremely dazzling');
+  });
 });
 
 describe('時刻ありの命式', () => {

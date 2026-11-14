@@ -1,6 +1,6 @@
 import './style.css';
 import {
-  computeChart, decideCharacter, rarityOf, yearFortune,
+  computeChart, decideCharacter, rarityOf, yearFortune, glamourTierOf, GLAMOUR_LABEL,
   type BirthInput, type Chart,
 } from './fortune';
 import {
@@ -14,7 +14,7 @@ import {
   type Entry,
 } from './store';
 
-const APP_VERSION = '0.1.1';
+const APP_VERSION = '0.1.2';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 interface Person {
@@ -31,15 +31,18 @@ type Route =
 let route: Route = { name: 'input' };
 // 今回だけモードで合成した画像（メモリ内のみ）
 let transientImage: string | undefined;
+// 今回だけモードのポストフィックス表示（既定は付けない）
+let transientShowPostfix = false;
 
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 }
 
-function displayName(nickname: string, chart: Chart): { prefix: string; postfix: string; full: string } {
+function displayName(nickname: string, chart: Chart, showPostfix: boolean): { prefix: string; postfix: string; full: string } {
   const prefix = PREFIX_TITLE[chart.strongest];
   const postfix = POSTFIX_TITLE[chart.dayGan];
-  return { prefix, postfix, full: `${prefix} ${nickname}・${postfix}` };
+  // 基本形は「プレフィックス＋ニックネーム」。ポストフィックスは任意（オーナー決定 2026-11-15）
+  return { prefix, postfix, full: showPostfix ? `${prefix} ${nickname}・${postfix}` : `${prefix} ${nickname}` };
 }
 
 function headerHtml(): string {
@@ -123,6 +126,7 @@ function renderInput() {
       route = { name: 'detail', id: entry.id };
     } else {
       transientImage = undefined;
+      transientShowPostfix = false;
       route = { name: 'result', person };
     }
     render();
@@ -133,6 +137,8 @@ function renderInput() {
 interface ReadingOpts {
   image?: string;
   status?: Entry['status'];
+  showPostfix: boolean;
+  onTogglePostfix: (show: boolean) => void;
   onRegisterImage: (dataUrl: string) => void;
   onExport?: () => void;
   onSent?: () => void;
@@ -142,8 +148,9 @@ function renderReading(person: Person, opts: ReadingOpts): string {
   const chart = computeChart(person.birth);
   const spec = decideCharacter(chart);
   const rarity = rarityOf(chart);
-  const dn = displayName(person.nickname, chart);
-  const prompt = buildPrompt(chart, spec);
+  const dn = displayName(person.nickname, chart, opts.showPostfix);
+  const prompt = buildPrompt(chart, spec, rarity.stars);
+  const tier = glamourTierOf(rarity.stars);
   const now = new Date();
   const thisYear = now.getFullYear();
   const years = [thisYear, thisYear + 1].map((y) => yearFortune(chart, y));
@@ -187,8 +194,10 @@ function renderReading(person: Person, opts: ReadingOpts): string {
   return `
   <section class="card result-head">
     <div class="display-name"><span class="prefix">${esc(dn.prefix)}</span>
-    <span class="main-name">${esc(person.nickname)}<span class="postfix">・${esc(dn.postfix)}</span></span></div>
-    <p class="small">形態：${spec.form} ／ レア度：<span class="stars">${'★'.repeat(rarity.stars)}${'☆'.repeat(5 - rarity.stars)}</span>${opts.status ? ` ／ 状態：${opts.status === 'waiting' ? '画像待ち' : opts.status === 'done' ? '完成' : '贈った'}` : ''}</p>
+    <span class="main-name">${esc(person.nickname)}${opts.showPostfix ? `<span class="postfix">・${esc(dn.postfix)}</span>` : ''}</span></div>
+    <label class="check small"><input type="checkbox" id="postfixToggle" ${opts.showPostfix ? 'checked' : ''}> 後ろの称号「・${esc(dn.postfix)}」も付ける（基本は付けません）</label>
+    ${opts.image ? '<p class="small">※ 完成済みシールへの反映は、画像を登録し直したときに行われます。</p>' : ''}
+    <p class="small">形態：${spec.form} ／ レア度：<span class="stars">${'★'.repeat(rarity.stars)}${'☆'.repeat(5 - rarity.stars)}</span>（シールでは星ではなく「${GLAMOUR_LABEL[tier]}」の枠の派手さで表します）${opts.status ? ` ／ 状態：${opts.status === 'waiting' ? '画像待ち' : opts.status === 'done' ? '完成' : '贈った'}` : ''}</p>
     ${visual}
     <p class="small">${opts.image ? '' : '画像待ちの間はシルエットで表示しています。装備の影から完成形を想像してみてください。'}</p>
   </section>
@@ -242,7 +251,7 @@ function renderReading(person: Person, opts: ReadingOpts): string {
 
   <section class="card">
     <h2>画像を登録してシールを完成させる</h2>
-    <p class="small">生成した画像を選ぶと、絵全体が切れずに収まる形で名前帯とレア度の星を合成します。</p>
+    <p class="small">生成した画像を選ぶと、絵全体が切れずに収まる形で名前帯と枠を合成します。レア度は星ではなく、枠の派手さ（ふつう／キラ／大当たり）で表れます。</p>
     <input type="file" id="imageFile" accept="image/*">
     <div id="registerMsg"></div>
     ${opts.image ? `<div class="actions">
@@ -255,7 +264,7 @@ function renderReading(person: Person, opts: ReadingOpts): string {
 function bindReading(person: Person, opts: ReadingOpts) {
   const chart = computeChart(person.birth);
   const rarity = rarityOf(chart);
-  const dn = displayName(person.nickname, chart);
+  const dn = displayName(person.nickname, chart, opts.showPostfix);
   const copy = async (id: string) => {
     const el = app.querySelector<HTMLElement>(id);
     if (!el) return;
@@ -264,6 +273,9 @@ function bindReading(person: Person, opts: ReadingOpts) {
   };
   app.querySelector('#copyPrompt')?.addEventListener('click', () => copy('#promptText'));
   app.querySelector('#copyNegative')?.addEventListener('click', () => copy('#negativeText'));
+  app.querySelector<HTMLInputElement>('#postfixToggle')?.addEventListener('change', (ev) => {
+    opts.onTogglePostfix((ev.target as HTMLInputElement).checked);
+  });
   app.querySelector<HTMLInputElement>('#imageFile')?.addEventListener('change', async (ev) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
@@ -271,8 +283,8 @@ function bindReading(person: Person, opts: ReadingOpts) {
     try {
       const img = await loadImage(file);
       const canvas = composeSeal(img, {
-        prefix: dn.prefix, nickname: person.nickname, postfix: dn.postfix,
-        stars: rarity.stars, mainColor: chart.strongestElement,
+        prefix: dn.prefix, nickname: person.nickname, postfix: opts.showPostfix ? dn.postfix : '',
+        tier: glamourTierOf(rarity.stars), mainColor: chart.strongestElement,
       });
       opts.onRegisterImage(canvasToDataUrl(canvas));
     } catch {
@@ -287,6 +299,8 @@ function bindReading(person: Person, opts: ReadingOpts) {
 function renderResult(person: Person) {
   const opts: ReadingOpts = {
     image: transientImage,
+    showPostfix: transientShowPostfix,
+    onTogglePostfix: (show) => { transientShowPostfix = show; render(); },
     onRegisterImage: (dataUrl) => { transientImage = dataUrl; render(); },
     onExport: () => {
       if (transientImage) void exportSeal(transientImage, `seal-${person.nickname}.jpg`);
@@ -311,6 +325,8 @@ function renderDetail(id: string) {
   const opts: ReadingOpts = {
     image: entry.image,
     status: entry.status,
+    showPostfix: entry.showPostfix ?? false,
+    onTogglePostfix: (show) => { updateEntry(id, { showPostfix: show }); render(); },
     onRegisterImage: (dataUrl) => {
       updateEntry(id, { image: dataUrl, status: 'done' });
       render();
@@ -340,14 +356,15 @@ function renderList() {
     };
     const chart = computeChart(person.birth);
     const spec = decideCharacter(chart);
-    const dn = displayName(e.nickname, chart);
+    const showPostfix = e.showPostfix ?? false;
+    const dn = displayName(e.nickname, chart, showPostfix);
     const visual = e.image
       ? `<img src="${e.image}" alt="">`
       : silhouetteSvg(chart, spec);
     return `<article class="seal-card" data-open="${e.id}">
       <div class="seal-thumb">${visual}</div>
       <div class="seal-meta">
-        <div class="seal-name"><span class="small">${esc(dn.prefix)}</span><br>${esc(e.nickname)}<span class="small">・${esc(dn.postfix)}</span></div>
+        <div class="seal-name"><span class="small">${esc(dn.prefix)}</span><br>${esc(e.nickname)}${showPostfix ? `<span class="small">・${esc(dn.postfix)}</span>` : ''}</div>
         <span class="badge badge-${e.status}">${e.status === 'waiting' ? '画像待ち' : e.status === 'done' ? '完成' : '贈った'}</span>
       </div>
     </article>`;

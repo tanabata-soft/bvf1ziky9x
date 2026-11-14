@@ -1,26 +1,28 @@
 // 画像の取り込み（トリミングなし）とシール合成（Canvas）。
-// v0.1.1: 絵を切らない「はめ込み（contain）」方式に変更し、名前帯を細く、
-// 星は帯の中に収めて、絵の面積を最大化するレイアウトにした。
+// v0.1.1: 絵を切らない「はめ込み（contain）」方式。名前帯を細くし、絵の面積を最大化。
+// v0.1.2: レア度は星で出さず、枠・ホロの「派手さ」3段階で表す（オーナー決定 2026-11-15）。
+//   ふつう＝細めの色枠・ホロ控えめ／キラ＝プリズム枠・星屑／大当たり＝金色の太枠・強いプリズム・枠の装飾模様。
 import { ELEMENT_COLOR } from './texts';
-import type { Element } from './fortune';
+import type { Element, GlamourTier } from './fortune';
 
 export interface SealName {
   prefix: string;
   nickname: string;
-  postfix: string;
-  stars: number;
+  postfix: string; // '' のときは付けない（既定は付けない）
+  tier: GlamourTier;
   mainColor: Element;
 }
 
 const SIZE = 1080;
-// 内側（白地）の範囲
-const IN = 30;
-const IN_SIZE = SIZE - IN * 2; // 1020
-// 名前帯：上部に細く（プレフィックス小＋名前大の2段は維持）
+// 名前帯：上部に細く（プレフィックス小＋名前大の2段）
 const BAND_H = 104;
-// 絵の領域：帯の下から内側の下端まで全部
-const IMG_Y = IN + BAND_H + 8; // 142
-const IMG_H = IN + IN_SIZE - IMG_Y; // 908
+
+// 段階ごとの枠まわりの寸法（outer=外枠の外側、inner=内側の白地の開始位置。差が枠の太さ）
+const FRAME: Record<GlamourTier, { outer: number; inner: number }> = {
+  normal: { outer: 10, inner: 28 }, // 細め（18px）
+  kira: { outer: 10, inner: 30 }, // 標準（20px）
+  jackpot: { outer: 6, inner: 50 }, // 太枠（44px）
+};
 
 /** ファイルを読み込み、HTMLImageElement を返す（トリミングはしない） */
 export function loadImage(file: File): Promise<HTMLImageElement> {
@@ -54,6 +56,14 @@ function prismGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
   return prism;
 }
 
+function goldGradient(ctx: CanvasRenderingContext2D): CanvasGradient {
+  const gold = ctx.createLinearGradient(0, 0, SIZE, SIZE);
+  gold.addColorStop(0, '#a87400'); gold.addColorStop(0.25, '#f6d365');
+  gold.addColorStop(0.5, '#fff6c9'); gold.addColorStop(0.75, '#d4a017');
+  gold.addColorStop(1, '#a87400');
+  return gold;
+}
+
 // 余白を埋めるプリズム地に散らす星屑（位置は固定して再現性を保つ）
 const SPARKLES: [number, number, number][] = [
   [0.06, 0.10, 13], [0.93, 0.08, 11], [0.05, 0.55, 10], [0.95, 0.48, 13],
@@ -71,32 +81,99 @@ function drawSparkle(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: n
   ctx.fill();
 }
 
-/** 生成画像＋名前帯＋レア度の星を合成したシール（Canvas）を返す */
+function drawDiamond(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r);
+  ctx.lineTo(cx + r, cy);
+  ctx.lineTo(cx, cy + r);
+  ctx.lineTo(cx - r, cy);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/** 大当たりの金枠に沿って装飾（星屑とダイヤ）を並べる */
+function drawFrameOrnaments(ctx: CanvasRenderingContext2D, outer: number, inner: number) {
+  const mid = (outer + inner) / 2;
+  const r = Math.max(7, (inner - outer) * 0.26);
+  const step = 92;
+  let i = 0;
+  const put = (x: number, y: number) => {
+    if (i % 2 === 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      drawSparkle(ctx, x, y, r);
+    } else {
+      ctx.fillStyle = '#fff3b0';
+      drawDiamond(ctx, x, y, r * 0.8);
+    }
+    i++;
+  };
+  for (let x = outer + 56; x <= SIZE - outer - 56; x += step) put(x, mid);
+  for (let x = outer + 56; x <= SIZE - outer - 56; x += step) put(x, SIZE - mid);
+  for (let y = outer + 56 + step / 2; y <= SIZE - outer - 56; y += step) put(mid, y);
+  for (let y = outer + 56 + step / 2; y <= SIZE - outer - 56; y += step) put(SIZE - mid, y);
+}
+
+/** 生成画像＋名前帯を合成したシール（Canvas）を返す。レア度は枠の派手さで表し、星は描かない */
 export function composeSeal(img: HTMLImageElement, name: SealName): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = SIZE;
   canvas.height = SIZE;
   const ctx = canvas.getContext('2d')!;
 
-  // 背景とプリズム枠（外枠は従来どおり）
+  const { outer, inner: IN } = FRAME[name.tier];
+  const IN_SIZE = SIZE - IN * 2;
+  const IMG_Y = IN + BAND_H + 8;
+  const IMG_H = IN + IN_SIZE - IMG_Y;
+
+  // 背景と外枠（段階で色・太さ・装飾が変わる）
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, SIZE, SIZE);
-  ctx.fillStyle = prismGradient(ctx);
-  roundRectPath(ctx, 10, 10, SIZE - 20, SIZE - 20, 64);
+  if (name.tier === 'jackpot') ctx.fillStyle = goldGradient(ctx);
+  else if (name.tier === 'kira') ctx.fillStyle = prismGradient(ctx);
+  else ctx.fillStyle = ELEMENT_COLOR[name.mainColor];
+  roundRectPath(ctx, outer, outer, SIZE - outer * 2, SIZE - outer * 2, 64);
   ctx.fill();
+  if (name.tier === 'jackpot') drawFrameOrnaments(ctx, outer, IN);
   ctx.fillStyle = '#ffffff';
   roundRectPath(ctx, IN, IN, IN_SIZE, IN_SIZE, 48);
   ctx.fill();
 
-  // 絵の領域：余白はプリズム地＋星屑で埋め、絵は全体が収まるよう contain で置く
+  // 絵の領域：余白は段階に応じた地で埋め、絵は全体が収まるよう contain で置く
   ctx.save();
   roundRectPath(ctx, IN, IMG_Y, IN_SIZE, IMG_H, 26);
   ctx.clip();
-  ctx.fillStyle = prismGradient(ctx);
-  ctx.fillRect(IN, IMG_Y, IN_SIZE, IMG_H);
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
-  for (const [fx, fy, r] of SPARKLES) {
-    drawSparkle(ctx, IN + fx * IN_SIZE, IMG_Y + fy * IMG_H, r);
+  if (name.tier === 'normal') {
+    ctx.fillStyle = '#fbfbff';
+    ctx.fillRect(IN, IMG_Y, IN_SIZE, IMG_H);
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = prismGradient(ctx);
+    ctx.fillRect(IN, IMG_Y, IN_SIZE, IMG_H);
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = '#ffffff';
+    for (const [fx, fy, r] of SPARKLES.slice(0, 4)) {
+      drawSparkle(ctx, IN + fx * IN_SIZE, IMG_Y + fy * IMG_H, r);
+    }
+    ctx.globalAlpha = 1;
+  } else {
+    ctx.fillStyle = prismGradient(ctx);
+    ctx.fillRect(IN, IMG_Y, IN_SIZE, IMG_H);
+    if (name.tier === 'jackpot') {
+      const glow = ctx.createRadialGradient(SIZE / 2, IMG_Y + IMG_H / 2, 80, SIZE / 2, IMG_Y + IMG_H / 2, IMG_H * 0.75);
+      glow.addColorStop(0, 'rgba(255,255,255,0.5)');
+      glow.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(IN, IMG_Y, IN_SIZE, IMG_H);
+    }
+    ctx.fillStyle = name.tier === 'jackpot' ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.55)';
+    for (const [fx, fy, r] of SPARKLES) {
+      drawSparkle(ctx, IN + fx * IN_SIZE, IMG_Y + fy * IMG_H, r);
+    }
+    if (name.tier === 'jackpot') {
+      ctx.fillStyle = 'rgba(255,246,201,0.75)';
+      for (const [fx, fy, r] of SPARKLES) {
+        drawSparkle(ctx, IN + ((fx + 0.37) % 1) * IN_SIZE, IMG_Y + ((fy + 0.43) % 1) * IMG_H, r * 0.55);
+      }
+    }
   }
   const scale = Math.min(IN_SIZE / img.naturalWidth, IMG_H / img.naturalHeight);
   const w = img.naturalWidth * scale;
@@ -104,28 +181,23 @@ export function composeSeal(img: HTMLImageElement, name: SealName): HTMLCanvasEl
   ctx.drawImage(img, IN + (IN_SIZE - w) / 2, IMG_Y + (IMG_H - h) / 2, w, h);
   ctx.restore();
 
-  // 名前帯（上部・細く）。星は帯の右端（プレフィックスの行）に小さく収める
+  // 名前帯（上部・細く）。基本形はプレフィックス＋ニックネーム。ポストフィックスは任意
   ctx.save();
   roundRectPath(ctx, IN, IN, IN_SIZE, BAND_H, 36);
   ctx.clip();
   ctx.fillStyle = ELEMENT_COLOR[name.mainColor];
   ctx.fillRect(IN, IN, IN_SIZE, BAND_H);
+  if (name.tier === 'jackpot') {
+    ctx.fillStyle = goldGradient(ctx);
+    ctx.fillRect(IN, IN + BAND_H - 6, IN_SIZE, 6);
+  }
   ctx.fillStyle = 'rgba(255,255,255,0.92)';
   ctx.textAlign = 'center';
   ctx.font = '500 30px "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif';
   ctx.fillText(name.prefix, SIZE / 2, IN + 42);
   ctx.font = '700 56px "Hiragino Maru Gothic ProN", "Hiragino Sans", sans-serif';
   const mainLine = name.postfix ? `${name.nickname}・${name.postfix}` : name.nickname;
-  ctx.fillText(mainLine, SIZE / 2, IN + BAND_H - 12, IN_SIZE - 120);
-  // レア度の星（帯の中、右上）
-  ctx.textAlign = 'right';
-  ctx.font = '28px sans-serif';
-  ctx.shadowColor = 'rgba(60,30,0,0.45)';
-  ctx.shadowBlur = 3;
-  ctx.shadowOffsetY = 1;
-  ctx.fillStyle = '#ffe066';
-  const stars = '★'.repeat(name.stars) + '☆'.repeat(5 - name.stars);
-  ctx.fillText(stars, IN + IN_SIZE - 16, IN + 44);
+  ctx.fillText(mainLine, SIZE / 2, IN + BAND_H - 12, IN_SIZE - 40);
   ctx.restore();
 
   return canvas;

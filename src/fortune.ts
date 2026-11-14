@@ -250,6 +250,21 @@ export interface Rarity {
   reasons: string[];
 }
 
+// ---------- レア度の「派手さ」段階（オーナー決定 2026-11-15） ----------
+// シール上では星を出さず、枠・ホロの豪華さでレア度を表す。星は詳細画面の読みにだけ残す。
+
+export type GlamourTier = 'normal' | 'kira' | 'jackpot';
+export const GLAMOUR_LABEL: Record<GlamourTier, string> = {
+  normal: 'ふつう', kira: 'キラ', jackpot: '大当たり',
+};
+
+/** 星1〜5 → 派手さ3段階（1〜2=ふつう／3〜4=キラ／5=大当たり） */
+export function glamourTierOf(stars: number): GlamourTier {
+  if (stars >= 5) return 'jackpot';
+  if (stars >= 3) return 'kira';
+  return 'normal';
+}
+
 export function rarityOf(chart: Chart): Rarity {
   const reasons: string[] = [];
   let points = 0;

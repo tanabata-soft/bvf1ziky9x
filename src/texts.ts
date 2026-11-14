@@ -1,6 +1,7 @@
 // 読みの文章（最小セット）と装備辞書、英語プロンプトの部品。
 // 装備辞書は「呪文・シルエット・装備の意味表示」の3出口で共用する（仕様書5.1）。
-import type { Element, FortuneStage, Gan, ShiShen, Zhi } from './fortune';
+import type { Element, FortuneStage, Gan, GlamourTier, ShiShen, Zhi } from './fortune';
+import { glamourTierOf } from './fortune';
 import type { CharacterSpec, Chart } from './fortune';
 
 export const DAY_GAN_TEXT: Record<Gan, string> = {
@@ -162,7 +163,20 @@ export interface PromptParts {
   partsJa: { label: string; value: string }[];
 }
 
-export function buildPrompt(chart: Chart, spec: CharacterSpec): PromptParts {
+// レア度の派手さ段階ごとに、背景のキラキラの強さを表す英語表現を出し分ける
+// （オーナー決定 2026-11-15：レア度は星でなく派手さで表す）
+const SPARKLE_EN: Record<GlamourTier, string> = {
+  normal: 'a softly sparkling pale prism background with just a few gentle sparkles',
+  kira: 'a rainbow prism holographic background with sparkling stardust',
+  jackpot: 'an extremely dazzling, luxurious rainbow prism holographic background filled with brilliant sparkles, glowing light rays and glittering gems',
+};
+const SPARKLE_JA: Record<GlamourTier, string> = {
+  normal: 'ふつう（星1〜2相当）：淡いプリズム背景に控えめなきらめき',
+  kira: 'キラ（星3〜4相当）：虹色プリズム背景に星屑のきらめき',
+  jackpot: '大当たり（星5相当）：豪華な虹色プリズム背景に強い光と宝石のきらめき',
+};
+
+export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3): PromptParts {
   const dayPillar = chart.pillars[2];
   const expr = DISHI_EN[dayPillar.diShi] ?? 'a gentle expression';
   const main = EQUIPMENT[spec.mainEq.shiShen];
@@ -172,8 +186,9 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec): PromptParts {
     return `${sizePhrase(s.sizeTier, info.en, false)} ${place}`;
   });
   const season = seasonOf(spec.seasonZhi);
+  const tier = glamourTierOf(stars);
   const lines = [
-    'A chibi character sticker illustration in the style of 1980s Japanese sparkling prize stickers. Super-deformed, about 2.5 heads tall, bold outlines, vivid colors, rainbow prism holographic background.',
+    `A chibi character sticker illustration in the style of 1980s Japanese sparkling prize stickers. Super-deformed, about 2.5 heads tall, bold outlines, vivid colors, ${SPARKLE_EN[tier]}.`,
     `The character is ${FORM_EN[spec.form]}, ${BODY_EN[chart.dayGan]}, with ${expr}.`,
     `It carries ${sizePhrase(spec.mainEq.sizeTier, main.en, true)}.`,
     ...(subs.length ? [`Also: ${subs.join(', and ')}.`] : []),
@@ -183,6 +198,7 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec): PromptParts {
     'No text, no letters, no words, no frame, no border, no logo.',
   ];
   const partsJa = [
+    { label: '背景の派手さ（レア度）', value: SPARKLE_JA[tier] },
     { label: '本体（日干）', value: `${chart.dayGan}＝${BODY_EN[chart.dayGan]}（日干のモチーフ）` },
     { label: '形態', value: spec.form },
     { label: '素の表情（日柱の十二運）', value: `${dayPillar.diShi}＝${expr}` },
