@@ -14,7 +14,7 @@ import {
   type Entry,
 } from './store';
 
-const APP_VERSION = '0.1.3';
+const APP_VERSION = '0.1.4';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 interface Person {
@@ -36,6 +36,41 @@ let transientShowPostfix = false;
 
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+}
+
+// ---------- ボタンのフィードバック（v0.1.4） ----------
+
+/** 実行系ボタン：処理中ラベル→完了（✓）／失敗表示を約1.5秒出して元に戻す */
+async function withButtonFeedback(
+  btn: HTMLButtonElement, busyLabel: string, doneLabel: string,
+  fn: () => Promise<void> | void,
+): Promise<boolean> {
+  const orig = btn.textContent ?? '';
+  btn.disabled = true;
+  btn.textContent = busyLabel;
+  let ok = true;
+  try { await fn(); } catch { ok = false; }
+  btn.textContent = ok ? doneLabel : 'うまくいきませんでした';
+  btn.classList.add(ok ? 'btn-success' : 'btn-fail');
+  window.setTimeout(() => {
+    btn.textContent = orig;
+    btn.classList.remove('btn-success', 'btn-fail');
+    btn.disabled = false;
+  }, 1500);
+  return ok;
+}
+
+/** コピーボタン：実際に書けたときだけ成功表示にする */
+function flashCopyResult(btn: HTMLButtonElement, ok: boolean): void {
+  const orig = btn.textContent ?? '';
+  btn.disabled = true;
+  btn.textContent = ok ? 'コピーしました ✓' : 'コピーできませんでした';
+  btn.classList.add(ok ? 'btn-success' : 'btn-fail');
+  window.setTimeout(() => {
+    btn.textContent = orig;
+    btn.classList.remove('btn-success', 'btn-fail');
+    btn.disabled = false;
+  }, 1500);
 }
 
 function displayName(nickname: string, chart: Chart, showPostfix: boolean): { prefix: string; postfix: string; full: string } {
@@ -140,7 +175,7 @@ interface ReadingOpts {
   showPostfix: boolean;
   onTogglePostfix: (show: boolean) => void;
   onRegisterImage: (dataUrl: string) => void;
-  onExport?: () => void;
+  onExport?: () => Promise<void> | void;
   onSent?: () => void;
 }
 
@@ -254,6 +289,7 @@ function renderReading(person: Person, opts: ReadingOpts): string {
     <p class="small">生成した画像を選ぶと、絵全体が切れずに収まる形で名前帯と枠を合成します。レア度は星ではなく、枠の派手さ（ふつう／キラ／大当たり）で表れます。</p>
     <input type="file" id="imageFile" accept="image/*">
     <div id="registerMsg"></div>
+    ${opts.image ? '<p class="success">✓ シールが完成しています。画像を選ぶと差し替えできます。</p>' : ''}
     ${opts.image ? `<div class="actions">
       <button class="primary" id="exportBtn">シール単体を書き出す（共有／ダウンロード）</button>
       <button id="exportExplainedBtn">解説つきで書き出す（共有／ダウンロード）</button>
@@ -266,14 +302,28 @@ function bindReading(person: Person, opts: ReadingOpts) {
   const chart = computeChart(person.birth);
   const rarity = rarityOf(chart);
   const dn = displayName(person.nickname, chart, opts.showPostfix);
-  const copy = async (id: string) => {
+  const copyText = async (id: string): Promise<boolean> => {
     const el = app.querySelector<HTMLElement>(id);
-    if (!el) return;
-    try { await navigator.clipboard.writeText(el.textContent ?? ''); }
-    catch { /* クリップボード不可の環境では選択して手動コピー */ }
+    if (!el) return false;
+    try {
+      await navigator.clipboard.writeText(el.textContent ?? '');
+      return true;
+    } catch {
+      // 書けなかった環境ではテキストを選択し、手動コピーできる状態にする
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+      return false;
+    }
   };
-  app.querySelector('#copyPrompt')?.addEventListener('click', () => copy('#promptText'));
-  app.querySelector('#copyNegative')?.addEventListener('click', () => copy('#negativeText'));
+  app.querySelector('#copyPrompt')?.addEventListener('click', async (ev) => {
+    flashCopyResult(ev.currentTarget as HTMLButtonElement, await copyText('#promptText'));
+  });
+  app.querySelector('#copyNegative')?.addEventListener('click', async (ev) => {
+    flashCopyResult(ev.currentTarget as HTMLButtonElement, await copyText('#negativeText'));
+  });
   app.querySelector<HTMLInputElement>('#postfixToggle')?.addEventListener('change', (ev) => {
     opts.onTogglePostfix((ev.target as HTMLInputElement).checked);
   });
@@ -281,6 +331,7 @@ function bindReading(person: Person, opts: ReadingOpts) {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
     const msg = app.querySelector('#registerMsg')!;
+    msg.innerHTML = '<p class="small">シールを合成しています…</p>';
     try {
       const img = await loadImage(file);
       const canvas = composeSeal(img, {
@@ -292,12 +343,18 @@ function bindReading(person: Person, opts: ReadingOpts) {
       msg.innerHTML = '<p class="error">画像を読み込めませんでした。別の画像でお試しください。</p>';
     }
   });
-  app.querySelector('#exportBtn')?.addEventListener('click', () => { opts.onExport?.(); });
-  app.querySelector('#exportExplainedBtn')?.addEventListener('click', async () => {
+  app.querySelector('#exportBtn')?.addEventListener('click', async (ev) => {
+    const btn = ev.currentTarget as HTMLButtonElement;
+    await withButtonFeedback(btn, '書き出しています…', '書き出しました ✓', async () => {
+      await opts.onExport?.();
+    });
+  });
+  app.querySelector('#exportExplainedBtn')?.addEventListener('click', async (ev) => {
     if (!opts.image) return;
+    const btn = ev.currentTarget as HTMLButtonElement;
     const msg = app.querySelector('#registerMsg');
-    try {
-      const sealImg = await loadImageFromUrl(opts.image);
+    const ok = await withButtonFeedback(btn, '解説つき画像を作っています…', '書き出しました ✓', async () => {
+      const sealImg = await loadImageFromUrl(opts.image!);
       const spec = decideCharacter(chart);
       const f = yearFortune(chart, new Date().getFullYear());
       const canvas = composeExplainedSeal(sealImg, {
@@ -313,8 +370,9 @@ function bindReading(person: Person, opts: ReadingOpts) {
         mainColor: chart.strongestElement,
       });
       await exportSeal(canvasToDataUrl(canvas), `seal-explained-${person.nickname}.jpg`);
-    } catch {
-      if (msg) msg.innerHTML = '<p class="error">解説つき画像を作れませんでした。もう一度お試しください。</p>';
+    });
+    if (!ok && msg) {
+      msg.innerHTML = '<p class="error">解説つき画像を作れませんでした。もう一度お試しください。</p>';
     }
   });
   app.querySelector('#sentBtn')?.addEventListener('click', () => { opts.onSent?.(); });
@@ -327,9 +385,7 @@ function renderResult(person: Person) {
     showPostfix: transientShowPostfix,
     onTogglePostfix: (show) => { transientShowPostfix = show; render(); },
     onRegisterImage: (dataUrl) => { transientImage = dataUrl; render(); },
-    onExport: () => {
-      if (transientImage) void exportSeal(transientImage, `seal-${person.nickname}.jpg`);
-    },
+    onExport: () => (transientImage ? exportSeal(transientImage, `seal-${person.nickname}.jpg`) : undefined),
   };
   app.innerHTML = `${headerHtml()}<main>
     <p class="small">「今回だけ」の結果です。コレクションには保存されていません。</p>
@@ -356,9 +412,7 @@ function renderDetail(id: string) {
       updateEntry(id, { image: dataUrl, status: 'done' });
       render();
     },
-    onExport: () => {
-      if (entry.image) void exportSeal(entry.image, `seal-${entry.nickname}.jpg`);
-    },
+    onExport: () => (entry.image ? exportSeal(entry.image, `seal-${entry.nickname}.jpg`) : undefined),
     onSent: entry.status === 'done' ? () => { updateEntry(id, { status: 'sent' }); render(); } : undefined,
   };
   app.innerHTML = `${headerHtml()}<main>
