@@ -1,0 +1,158 @@
+[
+ {
+  "name": "lichun-before",
+  "y": 2024,
+  "m": 2,
+  "d": 3,
+  "hour": 12,
+  "minute": 0,
+  "sxtwl": {
+   "year": "癸卯",
+   "month": "乙丑",
+   "day": "丁酉"
+  }
+ },
+ {
+  "name": "lichun-day-am",
+  "y": 2024,
+  "m": 2,
+  "d": 4,
+  "hour": 12,
+  "minute": 0,
+  "sxtwl": {
+   "year": "甲辰",
+   "month": "丙寅",
+   "day": "戊戌"
+  }
+ },
+ {
+  "name": "lichun-day-pm",
+  "y": 2024,
+  "m": 2,
+  "d": 4,
+  "hour": 18,
+  "minute": 0,
+  "sxtwl": {
+   "year": "甲辰",
+   "month": "丙寅",
+   "day": "戊戌"
+  }
+ },
+ {
+  "name": "lichun-after",
+  "y": 2024,
+  "m": 2,
+  "d": 5,
+  "hour": 12,
+  "minute": 0,
+  "sxtwl": {
+   "year": "甲辰",
+   "month": "丙寅",
+   "day": "己亥"
+  }
+ },
+ {
+  "name": "leap-day",
+  "y": 2024,
+  "m": 2,
+  "d": 29,
+  "hour": 12,
+  "minute": 0,
+  "sxtwl": {
+   "year": "甲辰",
+   "month": "丙寅",
+   "day": "癸亥"
+  }
+ },
+ {
+  "name": "jingzhe-before",
+  "y": 2024,
+  "m": 3,
+  "d": 5,
+  "hour": 9,
+  "minute": 0,
+  "sxtwl": {
+   "year": "甲辰",
+   "month": "丁卯",
+   "day": "戊辰"
+  }
+ },
+ {
+  "name": "jingzhe-after",
+  "y": 2024,
+  "m": 3,
+  "d": 5,
+  "hour": 12,
+  "minute": 0,
+  "sxtwl": {
+   "year": "甲辰",
+   "month": "丁卯",
+   "day": "戊辰"
+  }
+ },
+ {
+  "name": "plain-1990",
+  "y": 1990,
+  "m": 6,
+  "d": 15,
+  "hour": 8,
+  "minute": 0,
+  "sxtwl": {
+   "year": "庚午",
+   "month": "壬午",
+   "day": "辛亥"
+  }
+ },
+ {
+  "name": "newyear-2000",
+  "y": 2000,
+  "m": 1,
+  "d": 1,
+  "hour": 0,
+  "minute": 30,
+  "sxtwl": {
+   "year": "己卯",
+   "month": "丙子",
+   "day": "戊午"
+  }
+ },
+ {
+  "name": "hour-23",
+  "y": 2023,
+  "m": 12,
+  "d": 31,
+  "hour": 23,
+  "minute": 30,
+  "sxtwl": {
+   "year": "癸卯",
+   "month": "甲子",
+   "day": "癸亥"
+  }
+ },
+ {
+  "name": "known-chart",
+  "y": 1917,
+  "m": 7,
+  "d": 22,
+  "hour": 12,
+  "minute": 0,
+  "sxtwl": {
+   "year": "丁巳",
+   "month": "丁未",
+   "day": "乙丑"
+  }
+ },
+ {
+  "name": "summer-solstice",
+  "y": 2025,
+  "m": 6,
+  "d": 21,
+  "hour": 12,
+  "minute": 0,
+  "sxtwl": {
+   "year": "乙巳",
+   "month": "壬午",
+   "day": "辛酉"
+  }
+ }
+]
