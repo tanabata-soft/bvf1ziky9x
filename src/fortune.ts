@@ -281,6 +281,15 @@ export function defaultToneOf(strongest: ShiShen): Tone {
   return 'normal';
 }
 
+// ---------- キャラの見た目（オーナー決定 2026-11-15） ----------
+// 占いの入力（本人の性別）ではなく、作るキャラの見た目の指定。呪文だけに効き、
+// 称号とシール合成は変えない。既定は「指定なし」（AIにおまかせ）。
+
+export type Appearance = 'none' | 'boy' | 'girl';
+export const APPEARANCE_LABEL: Record<Appearance, string> = {
+  none: '指定なし', boy: '男の子', girl: '女の子',
+};
+
 export function rarityOf(chart: Chart): Rarity {
   const reasons: string[] = [];
   let points = 0;

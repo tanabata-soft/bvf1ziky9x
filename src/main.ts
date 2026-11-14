@@ -1,8 +1,8 @@
 import './style.css';
 import {
   computeChart, decideCharacter, rarityOf, yearFortune, glamourTierOf, GLAMOUR_LABEL,
-  defaultToneOf, TONE_LABEL,
-  type BirthInput, type Chart, type Tone,
+  defaultToneOf, TONE_LABEL, APPEARANCE_LABEL,
+  type Appearance, type BirthInput, type Chart, type Tone,
 } from './fortune';
 import {
   DAY_GAN_TEXT, DAY_GAN_SHORT, STRONGEST_TEXT, YEAR_STAR_TEXT, STAGE_TEXT,
@@ -16,7 +16,7 @@ import {
   type Entry,
 } from './store';
 
-const APP_VERSION = '0.1.6';
+const APP_VERSION = '0.1.7';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 interface Person {
@@ -37,6 +37,8 @@ let transientImage: string | undefined;
 let transientShowPostfix = false;
 // 今回だけモードのトーン（null の間は一番強い星からの初期値を使う）
 let transientTone: Tone | null = null;
+// 今回だけモードの見た目（既定は指定なし）
+let transientAppearance: Appearance = 'none';
 
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -126,6 +128,11 @@ function renderInput() {
       </label>
       <label class="check"><input id="timeUnknown" type="checkbox"> 出生時刻は不明（時柱なしで占います）</label>
       <fieldset>
+        <legend>キャラの見た目</legend>
+        <p class="small">占う相手の性別ではなく、作る分身キャラの見た目の指定です。呪文（プロンプト）にだけ効きます。</p>
+        ${(['none', 'boy', 'girl'] as Appearance[]).map((a) => `<label class="check"><input type="radio" name="appearance" value="${a}" ${a === 'none' ? 'checked' : ''}> ${APPEARANCE_LABEL[a]}</label>`).join('')}
+      </fieldset>
+      <fieldset>
         <legend>この結果の扱い</legend>
         <label class="check"><input type="radio" name="save" value="save" checked> コレクションに保存する</label>
         <label class="check"><input type="radio" name="save" value="once"> 今回だけ（保存しない）</label>
@@ -158,16 +165,18 @@ function renderInput() {
       hour = hh; minute = mm;
     }
     const person: Person = { nickname, birth: { y, m, d, hour, minute } };
+    const appearance = (app.querySelector<HTMLInputElement>('input[name="appearance"]:checked')?.value ?? 'none') as Appearance;
     const save = (app.querySelector<HTMLInputElement>('input[name="save"]:checked')!).value === 'save';
     if (save) {
       const entry = addEntry({
-        nickname, y, m, d, hour, minute, status: 'waiting',
+        nickname, y, m, d, hour, minute, status: 'waiting', appearance,
       });
       route = { name: 'detail', id: entry.id };
     } else {
       transientImage = undefined;
       transientShowPostfix = false;
       transientTone = null;
+      transientAppearance = appearance;
       route = { name: 'result', person };
     }
     render();
@@ -180,8 +189,10 @@ interface ReadingOpts {
   status?: Entry['status'];
   showPostfix: boolean;
   tone: Tone;
+  appearance: Appearance;
   onTogglePostfix: (show: boolean) => void;
   onToneChange: (tone: Tone) => void;
+  onAppearanceChange: (appearance: Appearance) => void;
   onRegisterImage: (dataUrl: string) => void;
   onExport?: () => Promise<void> | void;
   onSent?: () => void;
@@ -192,7 +203,7 @@ function renderReading(person: Person, opts: ReadingOpts): string {
   const spec = decideCharacter(chart);
   const rarity = rarityOf(chart);
   const dn = displayName(person.nickname, chart, opts.showPostfix, opts.tone);
-  const prompt = buildPrompt(chart, spec, rarity.stars, opts.tone);
+  const prompt = buildPrompt(chart, spec, rarity.stars, opts.tone, opts.appearance);
   const tier = glamourTierOf(rarity.stars);
   const now = new Date();
   const thisYear = now.getFullYear();
@@ -240,6 +251,8 @@ function renderReading(person: Person, opts: ReadingOpts): string {
     <label class="check small"><input type="checkbox" id="postfixToggle" ${opts.showPostfix ? 'checked' : ''}> 後ろの称号「・${esc(dn.postfix)}」も付ける（基本は付けません）</label>
     <div class="tone-row"><span class="small">キャラのトーン：</span>${(['normal', 'dark', 'villain'] as Tone[]).map((t) => `<label class="check small"><input type="radio" name="toneSel" value="${t}" ${opts.tone === t ? 'checked' : ''}> ${TONE_LABEL[t]}</label>`).join('')}</div>
     <p class="small">トーンを変えると、称号・呪文・シールの帯の色が変わります。初期値は一番強い星からの提案です。</p>
+    <div class="tone-row"><span class="small">キャラの見た目：</span>${(['none', 'boy', 'girl'] as Appearance[]).map((a) => `<label class="check small"><input type="radio" name="appearanceSel" value="${a}" ${opts.appearance === a ? 'checked' : ''}> ${APPEARANCE_LABEL[a]}</label>`).join('')}</div>
+    <p class="small">見た目は分身キャラの見た目の指定で、呪文にだけ効きます（称号とシールは変わりません）。</p>
     ${opts.image ? '<p class="small">※ 完成済みシールへの反映は、画像を登録し直したときに行われます。</p>' : ''}
     <p class="small">形態：${spec.form} ／ レア度：<span class="stars">${'★'.repeat(rarity.stars)}${'☆'.repeat(5 - rarity.stars)}</span>（シールでは星ではなく「${GLAMOUR_LABEL[tier]}」の枠の派手さで表します）${opts.status ? ` ／ 状態：${opts.status === 'waiting' ? '画像待ち' : opts.status === 'done' ? '完成' : '贈った'}` : ''}</p>
     ${visual}
@@ -339,6 +352,9 @@ function bindReading(person: Person, opts: ReadingOpts) {
   app.querySelectorAll<HTMLInputElement>('input[name="toneSel"]').forEach((r) => {
     r.addEventListener('change', () => { opts.onToneChange(r.value as Tone); });
   });
+  app.querySelectorAll<HTMLInputElement>('input[name="appearanceSel"]').forEach((r) => {
+    r.addEventListener('change', () => { opts.onAppearanceChange(r.value as Appearance); });
+  });
   app.querySelector<HTMLInputElement>('#imageFile')?.addEventListener('change', async (ev) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
@@ -397,8 +413,10 @@ function renderResult(person: Person) {
     image: transientImage,
     showPostfix: transientShowPostfix,
     tone: transientTone ?? defaultToneOf(chart.strongest),
+    appearance: transientAppearance,
     onTogglePostfix: (show) => { transientShowPostfix = show; render(); },
     onToneChange: (tone) => { transientTone = tone; render(); },
+    onAppearanceChange: (appearance) => { transientAppearance = appearance; render(); },
     onRegisterImage: (dataUrl) => { transientImage = dataUrl; render(); },
     onExport: () => (transientImage ? exportSeal(transientImage, `seal-${person.nickname}.jpg`) : undefined),
   };
@@ -424,8 +442,10 @@ function renderDetail(id: string) {
     status: entry.status,
     showPostfix: entry.showPostfix ?? false,
     tone: entry.tone ?? defaultToneOf(chart.strongest),
+    appearance: entry.appearance ?? 'none',
     onTogglePostfix: (show) => { updateEntry(id, { showPostfix: show }); render(); },
     onToneChange: (tone) => { updateEntry(id, { tone }); render(); },
+    onAppearanceChange: (appearance) => { updateEntry(id, { appearance }); render(); },
     onRegisterImage: (dataUrl) => {
       updateEntry(id, { image: dataUrl, status: 'done' });
       render();

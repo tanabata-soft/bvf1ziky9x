@@ -1,6 +1,6 @@
 // 読みの文章（最小セット）と装備辞書、英語プロンプトの部品。
 // 装備辞書は「呪文・シルエット・装備の意味表示」の3出口で共用する（仕様書5.1）。
-import type { Element, FortuneStage, Gan, GlamourTier, ShiShen, Tone, Zhi } from './fortune';
+import type { Appearance, Element, FormType, FortuneStage, Gan, GlamourTier, ShiShen, Tone, Zhi } from './fortune';
 import { glamourTierOf } from './fortune';
 import type { CharacterSpec, Chart } from './fortune';
 
@@ -226,7 +226,44 @@ export function negativePromptOf(tone: Tone): string {
     : `${NEGATIVE_BASE}, horror, grotesque, realistic violence, blood, creepy`;
 }
 
-export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: Tone = 'normal'): PromptParts {
+// 見た目（指定なし／男の子／女の子）の呪文への反映（オーナー決定 2026-11-15）。
+// 人型・精霊型ではキャラそのものを男の子／女の子として書き分ける。
+// 獣型・道具型・群体型では性別表現は付けず、小さな雰囲気の差だけにする。
+const APPEARANCE_FORM_EN: Partial<Record<FormType, Record<'boy' | 'girl', string>>> = {
+  人型: { boy: 'a small boy character', girl: 'a cute little girl character' },
+  精霊型: { boy: 'a small boy fairy spirit character', girl: 'a cute little girl fairy spirit character' },
+};
+const APPEARANCE_EXTRA_EN: Record<FormType, Record<'boy' | 'girl', string>> = {
+  人型: {
+    boy: 'Give him a boyish look with short hair and a neat, adventurous outfit.',
+    girl: 'Give her a feminine look with long silky hair, a ribbon hair accessory and a pretty dress-like outfit with lace details.',
+  },
+  精霊型: {
+    boy: 'Give him a boyish look with short hair and a neat, adventurous outfit.',
+    girl: 'Give her a feminine look with long silky hair, a ribbon hair accessory and a pretty dress-like outfit with lace details.',
+  },
+  獣型: {
+    boy: 'Add only a small boyish touch: a tiny little cap.',
+    girl: 'Add only a small feminine touch: a cute ribbon and long eyelashes.',
+  },
+  道具型: {
+    boy: 'Add only a small boyish touch: a tiny little cap.',
+    girl: 'Add only a small feminine touch: a cute ribbon and long eyelashes.',
+  },
+  群体型: {
+    boy: 'Add only a small boyish touch: tiny little caps.',
+    girl: 'Add only a small feminine touch: cute ribbons and long eyelashes.',
+  },
+};
+const APPEARANCE_JA: Record<FormType, Record<Appearance, string>> = {
+  人型: { none: '指定なし（AIにおまかせ）', boy: '男の子：男の子キャラとして、短い髪と活発な装い', girl: '女の子：女の子キャラとして、長い髪・リボン・ドレス風の装い' },
+  精霊型: { none: '指定なし（AIにおまかせ）', boy: '男の子：男の子の精霊として、短い髪と活発な装い', girl: '女の子：女の子の精霊として、長い髪・リボン・ドレス風の装い' },
+  獣型: { none: '指定なし（AIにおまかせ）', boy: '男の子：小さな帽子の雰囲気だけ（無理な人型化はしない）', girl: '女の子：リボンとまつ毛の雰囲気だけ（無理な人型化はしない）' },
+  道具型: { none: '指定なし（AIにおまかせ）', boy: '男の子：小さな帽子の雰囲気だけ（無理な人型化はしない）', girl: '女の子：リボンとまつ毛の雰囲気だけ（無理な人型化はしない）' },
+  群体型: { none: '指定なし（AIにおまかせ）', boy: '男の子：小さな帽子の雰囲気だけ（無理な人型化はしない）', girl: '女の子：リボンとまつ毛の雰囲気だけ（無理な人型化はしない）' },
+};
+
+export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: Tone = 'normal', appearance: Appearance = 'none'): PromptParts {
   const dayPillar = chart.pillars[2];
   const expr = DISHI_EN[dayPillar.diShi] ?? 'a gentle expression';
   const main = EQUIPMENT[spec.mainEq.shiShen];
@@ -237,9 +274,13 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
   });
   const season = seasonOf(spec.seasonZhi);
   const tier = glamourTierOf(stars);
+  const formPhrase = appearance === 'none'
+    ? FORM_EN[spec.form]
+    : (APPEARANCE_FORM_EN[spec.form]?.[appearance] ?? FORM_EN[spec.form]);
   const lines = [
     `A chibi character sticker illustration in the style of 1980s Japanese sparkling prize stickers. Super-deformed, about 2.5 heads tall, bold outlines, vivid colors, ${SPARKLE_EN[tier]}.`,
-    `The character is ${FORM_EN[spec.form]}, ${BODY_EN[chart.dayGan]}, with ${expr}.`,
+    `The character is ${formPhrase}, ${BODY_EN[chart.dayGan]}, with ${expr}.`,
+    ...(appearance === 'none' ? [] : [APPEARANCE_EXTRA_EN[spec.form][appearance]]),
     ...(TONE_MOOD_EN[tone] ? [TONE_MOOD_EN[tone]] : []),
     `It carries ${sizePhrase(spec.mainEq.sizeTier, main.en, true)}.`,
     ...(subs.length ? [`Also: ${subs.join(', and ')}.`] : []),
@@ -251,6 +292,7 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
   const partsJa = [
     { label: '背景の派手さ（レア度）', value: SPARKLE_JA[tier] },
     { label: 'トーン', value: TONE_MOOD_JA[tone] },
+    { label: '見た目', value: APPEARANCE_JA[spec.form][appearance] },
     { label: '本体（日干）', value: `${chart.dayGan}＝${BODY_EN[chart.dayGan]}（日干のモチーフ）` },
     { label: '形態', value: spec.form },
     { label: '素の表情（日柱の十二運）', value: `${dayPillar.diShi}＝${expr}` },
