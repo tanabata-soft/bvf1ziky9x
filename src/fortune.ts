@@ -265,6 +265,22 @@ export function glamourTierOf(stars: number): GlamourTier {
   return 'normal';
 }
 
+// ---------- キャラのトーン（オーナー決定 2026-11-15） ----------
+// 形態（5型）とは別の軸。称号・呪文の雰囲気・シールの帯色がトーンで変わる。
+// 初期値は一番強い通変からの提案で、作る人が詳細画面で自由に切り替えられる。
+
+export type Tone = 'normal' | 'dark' | 'villain';
+export const TONE_LABEL: Record<Tone, string> = {
+  normal: '通常', dark: 'ダークヒーロー', villain: 'ヴィラン',
+};
+
+/** トーンの初期値：七殺・偏印→ヴィラン／傷官・劫財→ダークヒーロー／それ以外→通常 */
+export function defaultToneOf(strongest: ShiShen): Tone {
+  if (strongest === '七殺' || strongest === '偏印') return 'villain';
+  if (strongest === '傷官' || strongest === '劫財') return 'dark';
+  return 'normal';
+}
+
 export function rarityOf(chart: Chart): Rarity {
   const reasons: string[] = [];
   let points = 0;

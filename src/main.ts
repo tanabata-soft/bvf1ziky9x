@@ -1,11 +1,12 @@
 import './style.css';
 import {
   computeChart, decideCharacter, rarityOf, yearFortune, glamourTierOf, GLAMOUR_LABEL,
-  type BirthInput, type Chart,
+  defaultToneOf, TONE_LABEL,
+  type BirthInput, type Chart, type Tone,
 } from './fortune';
 import {
   DAY_GAN_TEXT, DAY_GAN_SHORT, STRONGEST_TEXT, YEAR_STAR_TEXT, STAGE_TEXT,
-  EQUIPMENT, PREFIX_TITLE, POSTFIX_TITLE, ELEMENT_COLOR, buildPrompt, seasonOf, SEASON_JA,
+  EQUIPMENT, prefixTitleOf, POSTFIX_TITLE, ELEMENT_COLOR, buildPrompt, seasonOf, SEASON_JA,
 } from './texts';
 import { silhouetteSvg } from './silhouette';
 import { buildDisplayName } from './name';
@@ -15,7 +16,7 @@ import {
   type Entry,
 } from './store';
 
-const APP_VERSION = '0.1.5';
+const APP_VERSION = '0.1.6';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 interface Person {
@@ -34,6 +35,8 @@ let route: Route = { name: 'input' };
 let transientImage: string | undefined;
 // 今回だけモードのポストフィックス表示（既定は付けない）
 let transientShowPostfix = false;
+// 今回だけモードのトーン（null の間は一番強い星からの初期値を使う）
+let transientTone: Tone | null = null;
 
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -74,8 +77,8 @@ function flashCopyResult(btn: HTMLButtonElement, ok: boolean): void {
   }, 1500);
 }
 
-function displayName(nickname: string, chart: Chart, showPostfix: boolean): { prefix: string; postfix: string; full: string } {
-  const prefix = PREFIX_TITLE[chart.strongest];
+function displayName(nickname: string, chart: Chart, showPostfix: boolean, tone: Tone): { prefix: string; postfix: string; full: string } {
+  const prefix = prefixTitleOf(chart.strongest, tone);
   const postfix = POSTFIX_TITLE[chart.dayGan];
   // 基本形は「プレフィックス＋ニックネーム」を空白なしでつなげた1行。ポストフィックスは任意
   // （オーナー決定 2026-11-15）。組み立ては共通関数 buildDisplayName に寄せる
@@ -164,6 +167,7 @@ function renderInput() {
     } else {
       transientImage = undefined;
       transientShowPostfix = false;
+      transientTone = null;
       route = { name: 'result', person };
     }
     render();
@@ -175,7 +179,9 @@ interface ReadingOpts {
   image?: string;
   status?: Entry['status'];
   showPostfix: boolean;
+  tone: Tone;
   onTogglePostfix: (show: boolean) => void;
+  onToneChange: (tone: Tone) => void;
   onRegisterImage: (dataUrl: string) => void;
   onExport?: () => Promise<void> | void;
   onSent?: () => void;
@@ -185,8 +191,8 @@ function renderReading(person: Person, opts: ReadingOpts): string {
   const chart = computeChart(person.birth);
   const spec = decideCharacter(chart);
   const rarity = rarityOf(chart);
-  const dn = displayName(person.nickname, chart, opts.showPostfix);
-  const prompt = buildPrompt(chart, spec, rarity.stars);
+  const dn = displayName(person.nickname, chart, opts.showPostfix, opts.tone);
+  const prompt = buildPrompt(chart, spec, rarity.stars, opts.tone);
   const tier = glamourTierOf(rarity.stars);
   const now = new Date();
   const thisYear = now.getFullYear();
@@ -232,6 +238,8 @@ function renderReading(person: Person, opts: ReadingOpts): string {
   <section class="card result-head">
     <div class="display-name"><span class="prefix">${esc(dn.prefix)}</span><span class="main-name">${esc(person.nickname)}${opts.showPostfix ? `<span class="postfix">・${esc(dn.postfix)}</span>` : ''}</span></div>
     <label class="check small"><input type="checkbox" id="postfixToggle" ${opts.showPostfix ? 'checked' : ''}> 後ろの称号「・${esc(dn.postfix)}」も付ける（基本は付けません）</label>
+    <div class="tone-row"><span class="small">キャラのトーン：</span>${(['normal', 'dark', 'villain'] as Tone[]).map((t) => `<label class="check small"><input type="radio" name="toneSel" value="${t}" ${opts.tone === t ? 'checked' : ''}> ${TONE_LABEL[t]}</label>`).join('')}</div>
+    <p class="small">トーンを変えると、称号・呪文・シールの帯の色が変わります。初期値は一番強い星からの提案です。</p>
     ${opts.image ? '<p class="small">※ 完成済みシールへの反映は、画像を登録し直したときに行われます。</p>' : ''}
     <p class="small">形態：${spec.form} ／ レア度：<span class="stars">${'★'.repeat(rarity.stars)}${'☆'.repeat(5 - rarity.stars)}</span>（シールでは星ではなく「${GLAMOUR_LABEL[tier]}」の枠の派手さで表します）${opts.status ? ` ／ 状態：${opts.status === 'waiting' ? '画像待ち' : opts.status === 'done' ? '完成' : '贈った'}` : ''}</p>
     ${visual}
@@ -302,7 +310,7 @@ function renderReading(person: Person, opts: ReadingOpts): string {
 function bindReading(person: Person, opts: ReadingOpts) {
   const chart = computeChart(person.birth);
   const rarity = rarityOf(chart);
-  const dn = displayName(person.nickname, chart, opts.showPostfix);
+  const dn = displayName(person.nickname, chart, opts.showPostfix, opts.tone);
   const copyText = async (id: string): Promise<boolean> => {
     const el = app.querySelector<HTMLElement>(id);
     if (!el) return false;
@@ -328,6 +336,9 @@ function bindReading(person: Person, opts: ReadingOpts) {
   app.querySelector<HTMLInputElement>('#postfixToggle')?.addEventListener('change', (ev) => {
     opts.onTogglePostfix((ev.target as HTMLInputElement).checked);
   });
+  app.querySelectorAll<HTMLInputElement>('input[name="toneSel"]').forEach((r) => {
+    r.addEventListener('change', () => { opts.onToneChange(r.value as Tone); });
+  });
   app.querySelector<HTMLInputElement>('#imageFile')?.addEventListener('change', async (ev) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
@@ -337,7 +348,7 @@ function bindReading(person: Person, opts: ReadingOpts) {
       const img = await loadImage(file);
       const canvas = composeSeal(img, {
         prefix: dn.prefix, nickname: person.nickname, postfix: opts.showPostfix ? dn.postfix : '',
-        tier: glamourTierOf(rarity.stars), mainColor: chart.strongestElement,
+        tier: glamourTierOf(rarity.stars), mainColor: chart.strongestElement, tone: opts.tone,
       });
       opts.onRegisterImage(canvasToDataUrl(canvas));
     } catch {
@@ -381,10 +392,13 @@ function bindReading(person: Person, opts: ReadingOpts) {
 
 // ---------- 結果画面（今回だけ） ----------
 function renderResult(person: Person) {
+  const chart = computeChart(person.birth);
   const opts: ReadingOpts = {
     image: transientImage,
     showPostfix: transientShowPostfix,
+    tone: transientTone ?? defaultToneOf(chart.strongest),
     onTogglePostfix: (show) => { transientShowPostfix = show; render(); },
+    onToneChange: (tone) => { transientTone = tone; render(); },
     onRegisterImage: (dataUrl) => { transientImage = dataUrl; render(); },
     onExport: () => (transientImage ? exportSeal(transientImage, `seal-${person.nickname}.jpg`) : undefined),
   };
@@ -404,11 +418,14 @@ function renderDetail(id: string) {
     nickname: entry.nickname,
     birth: { y: entry.y, m: entry.m, d: entry.d, hour: entry.hour, minute: entry.minute },
   };
+  const chart = computeChart(person.birth);
   const opts: ReadingOpts = {
     image: entry.image,
     status: entry.status,
     showPostfix: entry.showPostfix ?? false,
+    tone: entry.tone ?? defaultToneOf(chart.strongest),
     onTogglePostfix: (show) => { updateEntry(id, { showPostfix: show }); render(); },
+    onToneChange: (tone) => { updateEntry(id, { tone }); render(); },
     onRegisterImage: (dataUrl) => {
       updateEntry(id, { image: dataUrl, status: 'done' });
       render();
@@ -437,7 +454,7 @@ function renderList() {
     const chart = computeChart(person.birth);
     const spec = decideCharacter(chart);
     const showPostfix = e.showPostfix ?? false;
-    const dn = displayName(e.nickname, chart, showPostfix);
+    const dn = displayName(e.nickname, chart, showPostfix, e.tone ?? defaultToneOf(chart.strongest));
     const visual = e.image
       ? `<img src="${e.image}" alt="">`
       : silhouetteSvg(chart, spec);

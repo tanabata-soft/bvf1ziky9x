@@ -6,7 +6,7 @@
 //   （オーナー決定 2026-11-15）。プレフィックスは少し小さめの字で同じ行に並べる。
 import { ELEMENT_COLOR } from './texts';
 import { displayNameSegments, type NameSegmentKind } from './name';
-import type { Element, GlamourTier } from './fortune';
+import type { Element, GlamourTier, Tone } from './fortune';
 
 export interface SealName {
   prefix: string;
@@ -14,6 +14,7 @@ export interface SealName {
   postfix: string; // '' のときは付けない（既定は付けない）
   tier: GlamourTier;
   mainColor: Element;
+  tone?: Tone; // 帯の色を決めるトーン（省略時は通常）
 }
 
 const SIZE = 1080;
@@ -185,10 +186,23 @@ export function composeSeal(img: HTMLImageElement, name: SealName): HTMLCanvasEl
   ctx.restore();
 
   // 名前帯（上部・細く）。基本形はプレフィックス＋ニックネーム。ポストフィックスは任意
+  // 帯の色はトーンで変わる（通常＝五行の色／ダークヒーロー＝深い青〜黒／ヴィラン＝紫〜黒）。
+  // 枠の派手さ（レア度段階）とは別軸で両立する（オーナー決定 2026-11-15）
   ctx.save();
   roundRectPath(ctx, IN, IN, IN_SIZE, BAND_H, 36);
   ctx.clip();
-  ctx.fillStyle = ELEMENT_COLOR[name.mainColor];
+  const tone = name.tone ?? 'normal';
+  if (tone === 'dark' || tone === 'villain') {
+    const g = ctx.createLinearGradient(IN, IN, SIZE - IN, IN + BAND_H);
+    if (tone === 'dark') {
+      g.addColorStop(0, '#274b73'); g.addColorStop(0.55, '#101f38'); g.addColorStop(1, '#04060c');
+    } else {
+      g.addColorStop(0, '#5b21b6'); g.addColorStop(0.55, '#2a0a45'); g.addColorStop(1, '#0a0314');
+    }
+    ctx.fillStyle = g;
+  } else {
+    ctx.fillStyle = ELEMENT_COLOR[name.mainColor];
+  }
   ctx.fillRect(IN, IN, IN_SIZE, BAND_H);
   if (name.tier === 'jackpot') {
     ctx.fillStyle = goldGradient(ctx);

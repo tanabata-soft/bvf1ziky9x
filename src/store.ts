@@ -1,4 +1,6 @@
 // コレクションの保存（localStorage、端末内のみ）
+import type { Tone } from './fortune';
+
 export type EntryStatus = 'waiting' | 'done' | 'sent';
 
 export interface Entry {
@@ -12,6 +14,7 @@ export interface Entry {
   status: EntryStatus;
   image?: string; // 合成済みシールの dataURL（完成時）
   showPostfix?: boolean; // ポストフィックス（日干の称号）を付けるか。既定は false（付けない）。旧データには無いので undefined は false 扱い
+  tone?: Tone; // キャラのトーン。旧データには無いので undefined は「一番強い星からの初期値」で算出する
   createdAt: number;
 }
 

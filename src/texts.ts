@@ -1,6 +1,6 @@
 // 読みの文章（最小セット）と装備辞書、英語プロンプトの部品。
 // 装備辞書は「呪文・シルエット・装備の意味表示」の3出口で共用する（仕様書5.1）。
-import type { Element, FortuneStage, Gan, GlamourTier, ShiShen, Zhi } from './fortune';
+import type { Element, FortuneStage, Gan, GlamourTier, ShiShen, Tone, Zhi } from './fortune';
 import { glamourTierOf } from './fortune';
 import type { CharacterSpec, Chart } from './fortune';
 
@@ -85,12 +85,26 @@ export const EQUIPMENT: Record<ShiShen, EquipmentInfo> = {
   劫財: { name: '炎のスカーフ', en: 'a scarf made of flames', meaning: '競い合う熱さと勢いの象徴です' },
 };
 
-/** プレフィックス称号（一番強い通変から） */
-export const PREFIX_TITLE: Record<ShiShen, string> = {
-  比肩: '凛々しき挑み手', 劫財: '熱き競い手', 食神: 'ほほえむ作り手', 傷官: '鮮やかなる表現者',
-  偏財: '福を呼ぶ商い手', 正財: '堅実な蓄え手', 七殺: '勇ましき切り込み手', 正官: '誇り高き騎士',
-  偏印: '神秘の探求者', 正印: '慈しみの守り手',
+/**
+ * プレフィックス称号（一番強い通変 × トーンの30種）。
+ * 後から差し替えやすいよう、通変ごとに3トーン分をまとめたデータ構造にしている。
+ */
+export const PREFIX_TITLES: Record<ShiShen, Record<Tone, string>> = {
+  比肩: { normal: '凛々しき挑み手', dark: '孤高の挑み手', villain: '反逆の挑み手' },
+  劫財: { normal: '熱き競い手', dark: '影に燃える競い手', villain: '炎の略奪者' },
+  食神: { normal: 'ほほえむ作り手', dark: '夜更けの作り手', villain: '甘い毒の作り手' },
+  傷官: { normal: '鮮やかなる表現者', dark: '月下の表現者', villain: '毒舌の扇動者' },
+  偏財: { normal: '福を呼ぶ商い手', dark: '裏通りの商い手', villain: '闇市の商い手' },
+  正財: { normal: '堅実な蓄え手', dark: '静かなる蓄え手', villain: '欲深き金庫番' },
+  七殺: { normal: '勇ましき切り込み手', dark: '影の斬り手', villain: '闇の執行者' },
+  正官: { normal: '誇り高き騎士', dark: '影の騎士', villain: '闇の騎士' },
+  偏印: { normal: '神秘の探求者', dark: '深淵の探求者', villain: '禁書の探求者' },
+  正印: { normal: '慈しみの守り手', dark: '静寂の守り手', villain: '影の守護者' },
 };
+
+export function prefixTitleOf(star: ShiShen, tone: Tone): string {
+  return PREFIX_TITLES[star][tone];
+}
 
 /** ポストフィックス称号（日干＝本体のタイプから） */
 export const POSTFIX_TITLE: Record<Gan, string> = {
@@ -190,7 +204,29 @@ const SPARKLE_JA: Record<GlamourTier, string> = {
   jackpot: '大当たり（星5相当）：豪華な虹色プリズム背景に強い光と宝石のきらめき',
 };
 
-export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3): PromptParts {
+// トーンごとの雰囲気（英語）。SDの可愛さは維持し、ホラーにはしない（オーナー決定 2026-11-15）
+const TONE_MOOD_EN: Record<Tone, string> = {
+  normal: '',
+  dark: 'The mood is cool and shadowy, like a lone hero of the night: a calm, confident smirk, a black flowing cape over the outfit, deep blue and black color accents, and a quiet night-time air with a faint crescent-moon glow.',
+  villain: 'The mood is playfully villainous but still cute and charming: tiny devil horns, a mischievous scheming grin, sly sparkling eyes, and purple and black decorative accents. Cute and adorable, never horror.',
+};
+const TONE_MOOD_JA: Record<Tone, string> = {
+  normal: '通常：いつもの明るい雰囲気',
+  dark: 'ダークヒーロー：クールで影のある雰囲気、黒いマント、夜の気配',
+  villain: 'ヴィラン：小さな悪魔の角、いたずらっぽい悪だくみの笑み、紫や黒の装飾（可愛さは維持、ホラーにはしない）',
+};
+
+// ネガティブプロンプトはトーンで出し分ける。通常は "dark mood" を禁止するが、
+// ダークヒーロー／ヴィランでは外し、代わりにホラー化だけを防ぐ語を入れる。
+const NEGATIVE_BASE =
+  'text, letters, words, alphabet, numbers, frame, border, logo, watermark, signature, realistic, photograph, 3d render, scary';
+export function negativePromptOf(tone: Tone): string {
+  return tone === 'normal'
+    ? `${NEGATIVE_BASE}, dark mood`
+    : `${NEGATIVE_BASE}, horror, grotesque, realistic violence, blood, creepy`;
+}
+
+export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: Tone = 'normal'): PromptParts {
   const dayPillar = chart.pillars[2];
   const expr = DISHI_EN[dayPillar.diShi] ?? 'a gentle expression';
   const main = EQUIPMENT[spec.mainEq.shiShen];
@@ -204,6 +240,7 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3): Promp
   const lines = [
     `A chibi character sticker illustration in the style of 1980s Japanese sparkling prize stickers. Super-deformed, about 2.5 heads tall, bold outlines, vivid colors, ${SPARKLE_EN[tier]}.`,
     `The character is ${FORM_EN[spec.form]}, ${BODY_EN[chart.dayGan]}, with ${expr}.`,
+    ...(TONE_MOOD_EN[tone] ? [TONE_MOOD_EN[tone]] : []),
     `It carries ${sizePhrase(spec.mainEq.sizeTier, main.en, true)}.`,
     ...(subs.length ? [`Also: ${subs.join(', and ')}.`] : []),
     `A small ${ELEMENT_COLOR_EN[spec.charmElement]} ribbon charm is tied at the neck.`,
@@ -213,6 +250,7 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3): Promp
   ];
   const partsJa = [
     { label: '背景の派手さ（レア度）', value: SPARKLE_JA[tier] },
+    { label: 'トーン', value: TONE_MOOD_JA[tone] },
     { label: '本体（日干）', value: `${chart.dayGan}＝${BODY_EN[chart.dayGan]}（日干のモチーフ）` },
     { label: '形態', value: spec.form },
     { label: '素の表情（日柱の十二運）', value: `${dayPillar.diShi}＝${expr}` },
@@ -228,8 +266,7 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3): Promp
   ];
   return {
     prompt: lines.join('\n'),
-    negative:
-      'text, letters, words, alphabet, numbers, frame, border, logo, watermark, signature, realistic, photograph, 3d render, scary, dark mood',
+    negative: negativePromptOf(tone),
     partsJa,
   };
 }

@@ -76,6 +76,8 @@ button.back { margin: 6px 0; }
 .display-name .prefix { font-size: 19px; font-weight: 600; color: var(--accent2); }
 .display-name .main-name { font-size: 30px; font-weight: 800; }
 .display-name .postfix { font-size: 19px; color: var(--accent); }
+.tone-row { display: flex; gap: 14px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.tone-row .check { margin: 0; }
 .stars { color: #e6a800; letter-spacing: 2px; }
 .seal-img, .seal-silhouette svg {
   width: min(340px, 86vw); height: auto; border-radius: 18px;
