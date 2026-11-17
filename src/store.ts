@@ -14,7 +14,7 @@ export interface Entry {
   status: EntryStatus;
   image?: string; // 合成済みシールの dataURL（完成時）
   showPostfix?: boolean; // ポストフィックス（日干の称号）を付けるか。既定は false（付けない）。旧データには無いので undefined は false 扱い
-  tone?: Tone; // キャラのトーン。旧データには無いので undefined は「一番強い星からの初期値」で算出する
+  tone?: Tone; // v0.2.2 までの手動選択の名残。v0.2.3 以降は読み込み時に使わず、常に最強の通変から算出する（toneOfChart）。データ自体は消さずに保持する
   appearance?: Appearance; // キャラの見た目。旧データには無いので undefined は「指定なし」扱い
   createdAt: number;
 }

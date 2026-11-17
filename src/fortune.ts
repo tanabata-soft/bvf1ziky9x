@@ -265,20 +265,55 @@ export function glamourTierOf(stars: number): GlamourTier {
   return 'normal';
 }
 
-// ---------- キャラのトーン（オーナー決定 2026-11-15） ----------
+// ---------- キャラのトーン（オーナー決定 2026-11-15、v0.2.3 で星ごとの固有トーンに変更） ----------
 // 形態（5型）とは別の軸。称号・呪文の雰囲気・シールの帯色がトーンで変わる。
-// 初期値は一番強い通変からの提案で、作る人が詳細画面で自由に切り替えられる。
+// v0.2.2 までは共通3種（通常／ダークヒーロー／ヴィラン）を利用者が切り替えられたが、
+// v0.2.3 からは最強の通変ごとに固有の10種とし、利用者は選ばず常に命式から決まる
+// 「占いの結果」として扱う（オーナー決定）。理由文・雰囲気文は texts.ts の TONE_INFO に持つ。
 
-export type Tone = 'normal' | 'dark' | 'villain';
+export type Tone =
+  | 'hero' // 正官：ヒーロー（正統派）
+  | 'sage' // 正印：賢者
+  | 'guardian' // 正財：守り手
+  | 'healer' // 食神：癒し手
+  | 'lonewolf' // 比肩：一匹狼
+  | 'gambler' // 劫財：勝負師
+  | 'rebel' // 傷官：反逆者
+  | 'trickster' // 偏財：トリックスター
+  | 'villain' // 七殺：ヴィラン
+  | 'phantom'; // 偏印：幻惑者
+
 export const TONE_LABEL: Record<Tone, string> = {
-  normal: '通常', dark: 'ダークヒーロー', villain: 'ヴィラン',
+  hero: 'ヒーロー（正統派）', sage: '賢者', guardian: '守り手', healer: '癒し手',
+  lonewolf: '一匹狼', gambler: '勝負師', rebel: '反逆者', trickster: 'トリックスター',
+  villain: 'ヴィラン', phantom: '幻惑者',
 };
 
-/** トーンの初期値：七殺・偏印→ヴィラン／傷官・劫財→ダークヒーロー／それ以外→通常 */
+/** 最強の通変 → 固有トーン（一意に決まる） */
+export const TONE_OF_STAR: Record<ShiShen, Tone> = {
+  正官: 'hero', 正印: 'sage', 正財: 'guardian', 食神: 'healer', 比肩: 'lonewolf',
+  劫財: 'gambler', 傷官: 'rebel', 偏財: 'trickster', 七殺: 'villain', 偏印: 'phantom',
+};
+
+/**
+ * 影・闇系のトーン。ネガティブプロンプトでは "dark mood" の禁止を外し、
+ * ホラー化防止の語に替える（texts.ts の negativePromptOf が使う）。
+ * 明るい系（正官・正印・正財・食神＝hero／sage／guardian／healer）は含まない。
+ */
+export const DARK_TONES: Tone[] = ['lonewolf', 'gambler', 'rebel', 'trickster', 'villain', 'phantom'];
+
+/** 最強の通変からトーンを決める */
 export function defaultToneOf(strongest: ShiShen): Tone {
-  if (strongest === '七殺' || strongest === '偏印') return 'villain';
-  if (strongest === '傷官' || strongest === '劫財') return 'dark';
-  return 'normal';
+  return TONE_OF_STAR[strongest];
+}
+
+/**
+ * その命式のトーン。常に最強の通変から算出する。
+ * 保存データに v0.2.2 までの手動選択（Entry.tone）が残っていても使わない
+ * （データ自体は消さない。読み込み側はこの関数だけを見る）。
+ */
+export function toneOfChart(chart: Chart): Tone {
+  return defaultToneOf(chart.strongest);
 }
 
 // ---------- キャラの見た目（オーナー決定 2026-11-15） ----------

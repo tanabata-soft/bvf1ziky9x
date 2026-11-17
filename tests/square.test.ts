@@ -8,7 +8,7 @@ describe('呪文の正方形指定', () => {
   const spec = decideCharacter(chart);
 
   it('呪文の先頭が正方形指定になっている', () => {
-    const p = buildPrompt(chart, spec, 3, 'normal', 'none');
+    const p = buildPrompt(chart, spec, 3, 'hero', 'none');
     const firstLine = p.prompt.split('\n')[0];
     expect(firstLine).toContain('Square image, 1:1 aspect ratio');
     expect(firstLine).toContain('entire square canvas');
@@ -17,18 +17,18 @@ describe('呪文の正方形指定', () => {
   });
 
   it('ネガティブに横長・縦長の除外が入る（全トーン共通）', () => {
-    for (const tone of ['normal', 'dark', 'villain'] as const) {
+    for (const tone of ['hero', 'rebel', 'villain'] as const) {
       const n = negativePromptOf(tone);
       expect(n).toContain('landscape orientation');
       expect(n).toContain('portrait orientation');
     }
-    const p = buildPrompt(chart, spec, 3, 'normal', 'none');
+    const p = buildPrompt(chart, spec, 3, 'hero', 'none');
     expect(p.negative).toContain('wide image');
   });
 
-  it('トーン別の出し分けは維持される', () => {
-    expect(negativePromptOf('normal')).toContain('dark mood');
-    expect(negativePromptOf('dark')).not.toContain('dark mood');
+  it('トーン別の出し分けは維持される（明るい系は dark mood 禁止、影・闇系はホラー防止）', () => {
+    expect(negativePromptOf('hero')).toContain('dark mood');
+    expect(negativePromptOf('rebel')).not.toContain('dark mood');
     expect(negativePromptOf('villain')).toContain('horror');
   });
 });

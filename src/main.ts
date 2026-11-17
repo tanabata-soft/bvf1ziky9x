@@ -1,13 +1,14 @@
 import './style.css';
 import {
   computeChart, decideCharacter, rarityOf, yearFortune, glamourTierOf, GLAMOUR_LABEL,
-  defaultToneOf, TONE_LABEL, APPEARANCE_LABEL,
-  type Appearance, type BirthInput, type Chart, type Tone,
+  toneOfChart, TONE_LABEL, APPEARANCE_LABEL,
+  type Appearance, type BirthInput, type Chart,
 } from './fortune';
+import { shareOrCopyText, type ShareOutcome } from './share';
 import {
   DAY_GAN_TEXT, STRONGEST_TEXT,
   EQUIPMENT, prefixTitleOf, POSTFIX_TITLE, ELEMENT_COLOR, buildPrompt, seasonOf, SEASON_JA,
-  fortuneBodyOf, explainedInfoOf,
+  fortuneBodyOf, explainedInfoOf, toneReasonOf,
 } from './texts';
 import { silhouetteSvg } from './silhouette';
 import { buildDisplayName } from './name';
@@ -46,8 +47,6 @@ let route: Route = { name: 'input' };
 let transientImage: string | undefined;
 // 今回だけモードのポストフィックス表示（既定は付けない）
 let transientShowPostfix = false;
-// 今回だけモードのトーン（null の間は一番強い星からの初期値を使う）
-let transientTone: Tone | null = null;
 // 今回だけモードの見た目（既定は指定なし）
 let transientAppearance: Appearance = 'none';
 // 詳細画面に一度だけ出すお知らせ（小さく保存したとき等）
@@ -92,8 +91,22 @@ function flashCopyResult(btn: HTMLButtonElement, ok: boolean): void {
   }, 1500);
 }
 
-function displayName(nickname: string, chart: Chart, showPostfix: boolean, tone: Tone): { prefix: string; postfix: string; full: string } {
-  const prefix = prefixTitleOf(chart.strongest, tone);
+/** 共有ボタン（v0.2.3）：結果を約1.5秒表示する。共有シートのキャンセル時は何も表示しない */
+function flashShareResult(btn: HTMLButtonElement, outcome: ShareOutcome): void {
+  if (outcome === 'cancelled') return;
+  const orig = btn.textContent ?? '';
+  btn.disabled = true;
+  btn.textContent = outcome === 'shared' ? '共有しました ✓' : outcome === 'copied' ? 'コピーしました ✓' : 'うまくいきませんでした';
+  btn.classList.add(outcome === 'failed' ? 'btn-fail' : 'btn-success');
+  window.setTimeout(() => {
+    btn.textContent = orig;
+    btn.classList.remove('btn-success', 'btn-fail');
+    btn.disabled = false;
+  }, 1500);
+}
+
+function displayName(nickname: string, chart: Chart, showPostfix: boolean): { prefix: string; postfix: string; full: string } {
+  const prefix = prefixTitleOf(chart.strongest);
   const postfix = POSTFIX_TITLE[chart.dayGan];
   // 基本形は「プレフィックス＋ニックネーム」を空白なしでつなげた1行。ポストフィックスは任意
   // （オーナー決定 2026-11-15）。組み立ては共通関数 buildDisplayName に寄せる
@@ -198,7 +211,6 @@ function renderInput() {
     } else {
       transientImage = undefined;
       transientShowPostfix = false;
-      transientTone = null;
       transientAppearance = appearance;
       route = { name: 'result', person };
     }
@@ -214,10 +226,8 @@ interface ReadingOpts {
   image?: string;
   status?: Entry['status'];
   showPostfix: boolean;
-  tone: Tone;
   appearance: Appearance;
   onTogglePostfix: (show: boolean) => void;
-  onToneChange: (tone: Tone) => void;
   onAppearanceChange: (appearance: Appearance) => void;
   onRegisterImage: (seal: HTMLCanvasElement) => Promise<RegisterOutcome>;
   onExport?: () => Promise<void> | void;
@@ -228,8 +238,10 @@ function renderReading(person: Person, opts: ReadingOpts): string {
   const chart = computeChart(person.birth);
   const spec = decideCharacter(chart);
   const rarity = rarityOf(chart);
-  const dn = displayName(person.nickname, chart, opts.showPostfix, opts.tone);
-  const prompt = buildPrompt(chart, spec, rarity.stars, opts.tone, opts.appearance);
+  // トーンは利用者が選ぶものではなく、常に最強の通変から決まる（v0.2.3〜）
+  const tone = toneOfChart(chart);
+  const dn = displayName(person.nickname, chart, opts.showPostfix);
+  const prompt = buildPrompt(chart, spec, rarity.stars, tone, opts.appearance);
   const tier = glamourTierOf(rarity.stars);
   const now = new Date();
   const thisYear = now.getFullYear();
@@ -274,8 +286,6 @@ function renderReading(person: Person, opts: ReadingOpts): string {
   <section class="card result-head">
     <div class="display-name"><span class="prefix">${esc(dn.prefix)}</span><span class="main-name">${esc(person.nickname)}${opts.showPostfix ? `<span class="postfix">・${esc(dn.postfix)}</span>` : ''}</span></div>
     <label class="check small"><input type="checkbox" id="postfixToggle" ${opts.showPostfix ? 'checked' : ''}> 後ろの称号「・${esc(dn.postfix)}」も付ける（基本は付けません）</label>
-    <div class="tone-row"><span class="small">キャラのトーン：</span>${(['normal', 'dark', 'villain'] as Tone[]).map((t) => `<label class="check small"><input type="radio" name="toneSel" value="${t}" ${opts.tone === t ? 'checked' : ''}> ${TONE_LABEL[t]}</label>`).join('')}</div>
-    <p class="small">トーンを変えると、称号・呪文・シールの帯の色が変わります。初期値は一番強い星からの提案です。</p>
     <div class="tone-row"><span class="small">キャラの見た目：</span>${(['none', 'boy', 'girl'] as Appearance[]).map((a) => `<label class="check small"><input type="radio" name="appearanceSel" value="${a}" ${opts.appearance === a ? 'checked' : ''}> ${APPEARANCE_LABEL[a]}</label>`).join('')}</div>
     <p class="small">見た目は分身キャラの見た目の指定で、呪文にだけ効きます（称号とシールは変わりません）。</p>
     ${opts.image ? '<p class="small">※ 完成済みシールへの反映は、画像を登録し直したときに行われます。</p>' : ''}
@@ -317,19 +327,23 @@ function renderReading(person: Person, opts: ReadingOpts): string {
       <li><strong>紋章</strong>：年支「${spec.crestZhi}」の刺繍</li>
       <li><strong>背景の季節</strong>：月支から「${SEASON_JA[seasonOf(spec.seasonZhi)]}」</li>
       <li><strong>素の表情</strong>：日柱の十二運「${dayPillar.diShi}」</li>
+      <li><strong>トーン</strong>：${TONE_LABEL[tone]} ― 一番強い星「${chart.strongest}」から決まります（${toneReasonOf(chart.strongest)}）。称号・呪文・シールの帯の色に反映されます</li>
     </ul>
   </section>
 
   <section class="card">
     <h2>キャラ生成の呪文（英語）</h2>
     <p class="small">お使いの画像生成AI（Gemini、ChatGPT、Museなど）にそのまま貼って使えます。名前は呪文に含まれていません。</p>
+    <p class="small">「呪文を共有」を押すと、共有シートから Muse や Gemini などのアプリへ直接送れます（共有できない環境ではコピーになります）。</p>
     <p class="small">正方形で出るよう呪文に入れています。横長になった場合は、画像登録のときに切り抜き位置を選べます。</p>
     <ul class="parts">${prompt.partsJa.map((p) => `<li><strong>${esc(p.label)}</strong>：${esc(p.value)}</li>`).join('')}</ul>
     <pre class="prompt" id="promptText">${esc(prompt.prompt)}</pre>
     <button class="primary" id="copyPrompt">呪文をコピー</button>
+    <button id="sharePrompt">呪文を共有</button>
     <h3>ネガティブプロンプト（対応するAI向け）</h3>
     <pre class="prompt" id="negativeText">${esc(prompt.negative)}</pre>
     <button id="copyNegative">ネガティブプロンプトをコピー</button>
+    <button id="shareNegative">ネガティブプロンプトを共有</button>
   </section>
 
   <section class="card">
@@ -361,7 +375,8 @@ async function buildExplainedDataUrl(person: Person, sealImage: string): Promise
 function bindReading(person: Person, opts: ReadingOpts) {
   const chart = computeChart(person.birth);
   const rarity = rarityOf(chart);
-  const dn = displayName(person.nickname, chart, opts.showPostfix, opts.tone);
+  const tone = toneOfChart(chart);
+  const dn = displayName(person.nickname, chart, opts.showPostfix);
   const copyText = async (id: string): Promise<boolean> => {
     const el = app.querySelector<HTMLElement>(id);
     if (!el) return false;
@@ -384,11 +399,22 @@ function bindReading(person: Person, opts: ReadingOpts) {
   app.querySelector('#copyNegative')?.addEventListener('click', async (ev) => {
     flashCopyResult(ev.currentTarget as HTMLButtonElement, await copyText('#negativeText'));
   });
+  // 共有（v0.2.3）：共有シートで受け先アプリへ直接送る。使えない環境ではコピーに落ちる
+  const shareFrom = async (id: string): Promise<ShareOutcome> => {
+    const el = app.querySelector<HTMLElement>(id);
+    return shareOrCopyText(el?.textContent ?? '', {
+      share: typeof navigator.share === 'function' ? (d) => navigator.share(d) : undefined,
+      writeClipboard: (t) => navigator.clipboard.writeText(t),
+    });
+  };
+  app.querySelector('#sharePrompt')?.addEventListener('click', async (ev) => {
+    flashShareResult(ev.currentTarget as HTMLButtonElement, await shareFrom('#promptText'));
+  });
+  app.querySelector('#shareNegative')?.addEventListener('click', async (ev) => {
+    flashShareResult(ev.currentTarget as HTMLButtonElement, await shareFrom('#negativeText'));
+  });
   app.querySelector<HTMLInputElement>('#postfixToggle')?.addEventListener('change', (ev) => {
     opts.onTogglePostfix((ev.target as HTMLInputElement).checked);
-  });
-  app.querySelectorAll<HTMLInputElement>('input[name="toneSel"]').forEach((r) => {
-    r.addEventListener('change', () => { opts.onToneChange(r.value as Tone); });
   });
   app.querySelectorAll<HTMLInputElement>('input[name="appearanceSel"]').forEach((r) => {
     r.addEventListener('change', () => { opts.onAppearanceChange(r.value as Appearance); });
@@ -396,7 +422,7 @@ function bindReading(person: Person, opts: ReadingOpts) {
   // 画像登録：選んだ直後に切り抜き調整を挟み、確定してから合成する（v0.1.8）
   const sealName = () => ({
     prefix: dn.prefix, nickname: person.nickname, postfix: opts.showPostfix ? dn.postfix : '',
-    tier: glamourTierOf(rarity.stars), mainColor: chart.strongestElement, tone: opts.tone,
+    tier: glamourTierOf(rarity.stars), mainColor: chart.strongestElement, tone,
   });
   app.querySelector<HTMLInputElement>('#imageFile')?.addEventListener('change', async (ev) => {
     const input = ev.target as HTMLInputElement;
@@ -598,14 +624,11 @@ function openCropEditor(
 
 // ---------- 結果画面（今回だけ） ----------
 function renderResult(person: Person) {
-  const chart = computeChart(person.birth);
   const opts: ReadingOpts = {
     image: transientImage,
     showPostfix: transientShowPostfix,
-    tone: transientTone ?? defaultToneOf(chart.strongest),
     appearance: transientAppearance,
     onTogglePostfix: (show) => { transientShowPostfix = show; render(); },
-    onToneChange: (tone) => { transientTone = tone; render(); },
     onAppearanceChange: (appearance) => { transientAppearance = appearance; render(); },
     onRegisterImage: async (seal) => {
       // 今回だけモードは端末に保存しないので、標準の大きさでメモリに持つだけ
@@ -636,15 +659,12 @@ function renderDetail(id: string) {
     nickname: entry.nickname,
     birth: { y: entry.y, m: entry.m, d: entry.d, hour: entry.hour, minute: entry.minute },
   };
-  const chart = computeChart(person.birth);
   const opts: ReadingOpts = {
     image: entry.image,
     status: entry.status,
     showPostfix: entry.showPostfix ?? false,
-    tone: entry.tone ?? defaultToneOf(chart.strongest),
     appearance: entry.appearance ?? 'none',
     onTogglePostfix: (show) => { safeUpdateEntry(id, { showPostfix: show }); render(); },
-    onToneChange: (tone) => { safeUpdateEntry(id, { tone }); render(); },
     onAppearanceChange: (appearance) => { safeUpdateEntry(id, { appearance }); render(); },
     onRegisterImage: async (seal) => {
       // 容量が足りなければ、より小さい段階の dataURL で自動で再試行する（v0.2.1）
@@ -713,7 +733,7 @@ function renderList() {
     const chart = computeChart(person.birth);
     const spec = decideCharacter(chart);
     const showPostfix = e.showPostfix ?? false;
-    const dn = displayName(e.nickname, chart, showPostfix, e.tone ?? defaultToneOf(chart.strongest));
+    const dn = displayName(e.nickname, chart, showPostfix);
     const visual = e.image
       ? `<img src="${e.image}" alt="">`
       : silhouetteSvg(chart, spec);

@@ -4,6 +4,7 @@ import type { Appearance, Element, FormType, FortuneStage, Gan, GlamourTier, Shi
 import {
   glamourTierOf, decideCharacter, yearFortune,
   GAN_ELEMENT, ZHI_ELEMENT, SANGOU, GOU_PAIRS, ROKUGOU, KEI_PAIRS,
+  TONE_OF_STAR, DARK_TONES,
 } from './fortune';
 import type { CharacterSpec, Chart } from './fortune';
 
@@ -215,24 +216,27 @@ export const EQUIPMENT: Record<ShiShen, EquipmentInfo> = {
 };
 
 /**
- * プレフィックス称号（一番強い通変 × トーンの30種）。
- * 後から差し替えやすいよう、通変ごとに3トーン分をまとめたデータ構造にしている。
+ * プレフィックス称号（一番強い通変ごとに1つ）。
+ * v0.2.2 までは通変×3トーンの30種だったが、v0.2.3 でトーンが星ごとの固有10種に
+ * なったため、称号も星ごとにそのトーンの性格を反映した1つに統一した。
+ * 旧30種のうち、その星のトーンに合うものを下書きの土台として採用している
+ * （例：正官＝誇り高き騎士、偏印＝深淵の探求者）。
  */
-export const PREFIX_TITLES: Record<ShiShen, Record<Tone, string>> = {
-  比肩: { normal: '凛々しき挑み手', dark: '孤高の挑み手', villain: '反逆の挑み手' },
-  劫財: { normal: '熱き競い手', dark: '影に燃える競い手', villain: '炎の略奪者' },
-  食神: { normal: 'ほほえむ作り手', dark: '夜更けの作り手', villain: '甘い毒の作り手' },
-  傷官: { normal: '鮮やかなる表現者', dark: '月下の表現者', villain: '毒舌の扇動者' },
-  偏財: { normal: '福を呼ぶ商い手', dark: '裏通りの商い手', villain: '闇市の商い手' },
-  正財: { normal: '堅実な蓄え手', dark: '静かなる蓄え手', villain: '欲深き金庫番' },
-  七殺: { normal: '勇ましき切り込み手', dark: '影の斬り手', villain: '闇の執行者' },
-  正官: { normal: '誇り高き騎士', dark: '影の騎士', villain: '闇の騎士' },
-  偏印: { normal: '神秘の探求者', dark: '深淵の探求者', villain: '禁書の探求者' },
-  正印: { normal: '慈しみの守り手', dark: '静寂の守り手', villain: '影の守護者' },
+export const PREFIX_TITLE: Record<ShiShen, string> = {
+  比肩: '孤高の挑み手',
+  劫財: '熱き競い手',
+  食神: 'ほほえむ作り手',
+  傷官: '鮮やかなる表現者',
+  偏財: '福を呼ぶ商い手',
+  正財: '堅実な蓄え手',
+  七殺: '闇の執行者',
+  正官: '誇り高き騎士',
+  偏印: '深淵の探求者',
+  正印: '慈しみの守り手',
 };
 
-export function prefixTitleOf(star: ShiShen, tone: Tone): string {
-  return PREFIX_TITLES[star][tone];
+export function prefixTitleOf(star: ShiShen): string {
+  return PREFIX_TITLE[star];
 }
 
 /** ポストフィックス称号（日干＝本体のタイプから） */
@@ -333,20 +337,73 @@ const SPARKLE_JA: Record<GlamourTier, string> = {
   jackpot: '大当たり（星5相当）：豪華な虹色プリズム背景に強い光と宝石のきらめき',
 };
 
-// トーンごとの雰囲気（英語）。SDの可愛さは維持し、ホラーにはしない（オーナー決定 2026-11-15）
-const TONE_MOOD_EN: Record<Tone, string> = {
-  normal: '',
-  dark: 'The mood is cool and shadowy, like a lone hero of the night: a calm, confident smirk, a black flowing cape over the outfit, deep blue and black color accents, and a quiet night-time air with a faint crescent-moon glow.',
-  villain: 'The mood is playfully villainous but still cute and charming: tiny devil horns, a mischievous scheming grin, sly sparkling eyes, and purple and black decorative accents. Cute and adorable, never horror.',
-};
-const TONE_MOOD_JA: Record<Tone, string> = {
-  normal: '通常：いつもの明るい雰囲気',
-  dark: 'ダークヒーロー：クールで影のある雰囲気、黒いマント、夜の気配',
-  villain: 'ヴィラン：小さな悪魔の角、いたずらっぽい悪だくみの笑み、紫や黒の装飾（可愛さは維持、ホラーにはしない）',
+// 固有トーンごとの情報（理由文・呪文の雰囲気文 EN/JA）。名称は fortune.ts の TONE_LABEL。
+// 雰囲気文はトーンごとに作り分ける。SDの可愛さは維持し、ホラーにはしない（オーナー決定 2026-11-15）
+export interface ToneInfo {
+  reason: string; // そのトーンになる理由（最強の星の性質）
+  moodEn: string; // 呪文に入れる雰囲気文（英語）
+  moodJa: string; // 部品の日本語併記
+}
+export const TONE_INFO: Record<Tone, ToneInfo> = {
+  hero: {
+    reason: '名誉と秩序の星',
+    moodEn: 'The mood is bright and gallant, like an orthodox hero: an upright, dignified bearing, a sincere shining smile, and clean, noble colors.',
+    moodJa: 'ヒーロー（正統派）：明るく凛々しい正統派ヒーローの雰囲気、誠実な笑顔と気品のある色合い',
+  },
+  sage: {
+    reason: '慈しみと学びの星',
+    moodEn: 'The mood is calm and wise, like a gentle sage: a serene knowing smile, soft warm light, and quiet scholarly elegance.',
+    moodJa: '賢者：穏やかで知的な雰囲気、静かな微笑みと学ぶ者の気品',
+  },
+  guardian: {
+    reason: '誠実に積み上げ、守る星',
+    moodEn: 'The mood is warm and dependable, like a steadfast guardian: a gentle reliable smile, steady earthy colors, and a protective, sheltering air.',
+    moodJa: '守り手：温かく頼れる雰囲気、穏やかな笑顔と守る安心感',
+  },
+  healer: {
+    reason: '温かく生み出し、分け与える星',
+    moodEn: 'The mood is soft and healing, like a kind maker who shares warmth: a tender relaxed smile, cozy gentle light, and a generous, nurturing air.',
+    moodJa: '癒し手：柔らかく温かい雰囲気、ほっとする笑顔と分け与える優しさ',
+  },
+  lonewolf: {
+    reason: '自分の足で立つ自立の星',
+    moodEn: 'The mood is cool and independent, like a lone wolf: a calm, self-assured smirk, standing apart under a wide sky, with deep blue-grey accents. Cute and charming, never horror.',
+    moodJa: '一匹狼：クールで独立した雰囲気、静かな自信と青灰の差し色（可愛さは維持、ホラーにはしない）',
+  },
+  gambler: {
+    reason: '熱い勝負の星',
+    moodEn: 'The mood is bold and fiery, like a passionate gambler who loves a good contest: an excited competitive grin, ember-red accents, and a restless, energetic air. Cute and charming, never horror.',
+    moodJa: '勝負師：熱く大胆な雰囲気、勝負を楽しむ笑顔と炎のような差し色（可愛さは維持、ホラーにはしない）',
+  },
+  rebel: {
+    reason: '権威に逆らう反骨の才能',
+    moodEn: 'The mood is sharp and rebellious, like a defiant artist who answers to no authority: a cheeky fearless grin, vivid indigo accents, and a free, untamed air. Cute and charming, never horror.',
+    moodJa: '反逆者：鋭く自由な雰囲気、恐れ知らずの笑顔と藍の差し色（可愛さは維持、ホラーにはしない）',
+  },
+  trickster: {
+    reason: '型にはまらず流れを読む星',
+    moodEn: 'The mood is playful and unpredictable, like a cheerful trickster who reads the flow of fortune: a sly fun-loving grin, sparkling gem accents, and a light, ever-changing air. Cute and charming, never horror.',
+    moodJa: 'トリックスター：遊び心のある雰囲気、流れを読む笑顔と宝石のきらめき（可愛さは維持、ホラーにはしない）',
+  },
+  villain: {
+    reason: '闘争と支配の星',
+    moodEn: 'The mood is dark and commanding, like a little ruler of the battlefield: a bold confident glare softened by cuteness, deep crimson and black accents, and an air of playful dominance. Cute and adorable, never horror.',
+    moodJa: 'ヴィラン：闇と支配の雰囲気、深紅と黒の差し色（可愛さは維持、ホラーにはしない）',
+  },
+  phantom: {
+    reason: '読めないひらめきと孤独の星',
+    moodEn: 'The mood is mysterious and dreamy, like an elusive illusionist: a quiet unreadable smile, deep purple and black accents, faint moonlit sparkles, and a solitary, enchanting air. Cute and adorable, never horror.',
+    moodJa: '幻惑者：読めない神秘的な雰囲気、紫と黒の差し色と月明かりのきらめき（可愛さは維持、ホラーにはしない）',
+  },
 };
 
-// ネガティブプロンプトはトーンで出し分ける。通常は "dark mood" を禁止するが、
-// ダークヒーロー／ヴィランでは外し、代わりにホラー化だけを防ぐ語を入れる。
+/** 最強の通変から、そのトーンになった理由文を引く */
+export function toneReasonOf(strongest: ShiShen): string {
+  return TONE_INFO[TONE_OF_STAR[strongest]].reason;
+}
+
+// ネガティブプロンプトはトーンで出し分ける。明るい系は "dark mood" を禁止するが、
+// 影・闇系（DARK_TONES）では外し、代わりにホラー化だけを防ぐ語を入れる。
 // v0.2.2: 男の子・女の子（顔立ちを少しリアル寄りに寄せる見た目）では、本文の
 // 「slightly realistic」と打ち消し合うため単独の realistic を外す。
 // 写真化・3D化の禁止（photorealistic, photograph, 3d render）は残す。
@@ -356,9 +413,9 @@ const NEGATIVE_BASE_FACE =
   'text, letters, words, alphabet, numbers, frame, border, logo, watermark, signature, photorealistic, photograph, 3d render, scary, landscape orientation, wide image, portrait orientation, vertical image, letterbox, pillarbox';
 export function negativePromptOf(tone: Tone, appearance: Appearance = 'none'): string {
   const base = appearance === 'none' ? NEGATIVE_BASE : NEGATIVE_BASE_FACE;
-  return tone === 'normal'
-    ? `${base}, dark mood`
-    : `${base}, horror, grotesque, realistic violence, blood, creepy`;
+  return DARK_TONES.includes(tone)
+    ? `${base}, horror, grotesque, realistic violence, blood, creepy`
+    : `${base}, dark mood`;
 }
 
 // 見た目（指定なし／男の子／女の子）の呪文への反映（オーナー決定 2026-11-15、v0.1.9 訂正、v0.2.2 改訂）。
@@ -407,7 +464,7 @@ const APPEARANCE_JA: Record<FormType, Record<Appearance, string>> = {
   群体型: { none: '指定なし（AIにおまかせ）', boy: '男の子：凛々しい眉とキラキラした瞳の顔まわりだけ（無理な人型化はしない）', girl: '女の子：まつ毛と柔らかい表情、リボンの顔まわりだけ（無理な人型化はしない）' },
 };
 
-export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: Tone = 'normal', appearance: Appearance = 'none'): PromptParts {
+export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: Tone = 'hero', appearance: Appearance = 'none'): PromptParts {
   const dayPillar = chart.pillars[2];
   const expr = DISHI_EN[dayPillar.diShi] ?? 'a gentle expression';
   const main = EQUIPMENT[spec.mainEq.shiShen];
@@ -431,7 +488,7 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
     `A chibi character sticker illustration in the style of 1980s Japanese sparkling prize stickers. Super-deformed, ${proportions}, bold outlines, vivid colors, ${SPARKLE_EN[tier]}.`,
     `The character is ${formPhrase}, ${BODY_EN[chart.dayGan]}, with ${expr}.`,
     ...(appearance === 'none' ? [] : [APPEARANCE_EXTRA_EN[spec.form][appearance]]),
-    ...(TONE_MOOD_EN[tone] ? [TONE_MOOD_EN[tone]] : []),
+    ...(TONE_INFO[tone].moodEn ? [TONE_INFO[tone].moodEn] : []),
     `It carries ${sizePhrase(spec.mainEq.sizeTier, main.en, true)}.`,
     ...(subs.length ? [`Also: ${subs.join(', and ')}.`] : []),
     `A small ${ELEMENT_COLOR_EN[spec.charmElement]} ribbon charm is tied at the neck.`,
@@ -442,7 +499,7 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
   const partsJa = [
     { label: '画角', value: '正方形（1:1）。キャラと背景が正方形の全面に広がる' },
     { label: '背景の派手さ（レア度）', value: SPARKLE_JA[tier] },
-    { label: 'トーン', value: TONE_MOOD_JA[tone] },
+    { label: 'トーン', value: TONE_INFO[tone].moodJa },
     { label: '見た目', value: APPEARANCE_JA[spec.form][appearance] },
     { label: '本体（日干）', value: `${chart.dayGan}＝${BODY_EN[chart.dayGan]}（日干のモチーフ）` },
     { label: '形態', value: spec.form },

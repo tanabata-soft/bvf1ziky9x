@@ -14,8 +14,19 @@ export interface SealName {
   postfix: string; // '' のときは付けない（既定は付けない）
   tier: GlamourTier;
   mainColor: Element;
-  tone?: Tone; // 帯の色を決めるトーン（省略時は通常）
+  tone?: Tone; // 帯の色を決めるトーン（省略時はヒーロー＝五行色）
 }
+
+// 名前帯の色（v0.2.3：トーンごと）。明るい系（ヒーロー／賢者／守り手／癒し手）は
+// 五行色ベースとし、この表にある影・闇系だけ濃色グラデーションにする。
+const BAND_GRADIENT: Partial<Record<Tone, [string, string, string]>> = {
+  lonewolf: ['#3a5a78', '#16222e', '#05090f'], // 一匹狼：青灰
+  gambler: ['#8a2b1d', '#3d130c', '#120503'], // 勝負師：炎の深紅
+  rebel: ['#2f3a9e', '#141a4d', '#04060f'], // 反逆者：藍
+  trickster: ['#0f5a4c', '#0a2e26', '#03100c'], // トリックスター：深いエメラルド
+  villain: ['#7a1630', '#33081a', '#0d0207'], // ヴィラン：深紅〜黒
+  phantom: ['#4a2166', '#1e0b33', '#07020f'], // 幻惑者：紫〜黒
+};
 
 const SIZE = 1080;
 // 名前帯：上部に細く（プレフィックス＋ニックネームを1行で連結。帯を詰めて絵の領域を広げる）
@@ -189,19 +200,15 @@ export function composeSeal(img: HTMLImageElement | HTMLCanvasElement, name: Sea
   ctx.restore();
 
   // 名前帯（上部・細く）。基本形はプレフィックス＋ニックネーム。ポストフィックスは任意
-  // 帯の色はトーンで変わる（通常＝五行の色／ダークヒーロー＝深い青〜黒／ヴィラン＝紫〜黒）。
+  // 帯の色はトーンで変わる（明るい系＝五行の色／影・闇系＝トーンごとの濃色グラデーション）。
   // 枠の派手さ（レア度段階）とは別軸で両立する（オーナー決定 2026-11-15）
   ctx.save();
   roundRectPath(ctx, IN, IN, IN_SIZE, BAND_H, 36);
   ctx.clip();
-  const tone = name.tone ?? 'normal';
-  if (tone === 'dark' || tone === 'villain') {
+  const band = BAND_GRADIENT[name.tone ?? 'hero'];
+  if (band) {
     const g = ctx.createLinearGradient(IN, IN, SIZE - IN, IN + BAND_H);
-    if (tone === 'dark') {
-      g.addColorStop(0, '#274b73'); g.addColorStop(0.55, '#101f38'); g.addColorStop(1, '#04060c');
-    } else {
-      g.addColorStop(0, '#5b21b6'); g.addColorStop(0.55, '#2a0a45'); g.addColorStop(1, '#0a0314');
-    }
+    g.addColorStop(0, band[0]); g.addColorStop(0.55, band[1]); g.addColorStop(1, band[2]);
     ctx.fillStyle = g;
   } else {
     ctx.fillStyle = ELEMENT_COLOR[name.mainColor];
