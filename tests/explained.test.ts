@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
-import { computeChart, yearFortune } from '../src/fortune';
-import { explainedInfoOf, personalityTextsOf, fortuneBodyOf } from '../src/texts';
+import { computeChart, yearFortune, ZHI_ANIMAL } from '../src/fortune';
+import { explainedInfoOf, personalityTextsOf, fortuneBodyOf, companionLineOf } from '../src/texts';
 import { hasSealImage, type Entry } from '../src/store';
 
 // v0.1.9: 解説つきシールの文面は explainedInfoOf（単一の生成処理）に寄せ、
@@ -18,6 +18,21 @@ describe('解説つきシールの共通生成（explainedInfoOf）', () => {
     expect(info.equipLines.some((l) => l.includes('勲章とマント'))).toBe(true);
     expect(info.equipLines.some((l) => l.includes('お守りのリボンチャーム'))).toBe(true);
     expect(info.footer).toContain('命式シール');
+  });
+
+  // v0.2.12: 「装備の意味」の末尾にお供（相棒）の説明行を足す（オーナー指摘「お供の説明ないの？」）
+  it('装備の意味の末尾にお供の説明行が入る', () => {
+    const info = explainedInfoOf(yuto, 2026);
+    const last = info.equipLines[info.equipLines.length - 1];
+    expect(last).toBe(companionLineOf(yuto));
+    expect(last.startsWith(`お供の${ZHI_ANIMAL[yuto.dayZhi]}：`)).toBe(true);
+    expect(last).toContain(`（日支 ${yuto.dayZhi}）`);
+    // 具体例：マサト（1977-07-07、日支 丑）は牛の行になる
+    const masato = computeChart({ y: 1977, m: 7, d: 7, hour: null, minute: 0 });
+    expect(masato.dayZhi).toBe('丑');
+    const minfo = explainedInfoOf(masato, 2026);
+    expect(minfo.equipLines[minfo.equipLines.length - 1])
+      .toBe('お供の牛：粘り強さと芯の強さの象徴です（日支 丑）');
   });
 
   it('運勢本文は fortuneBodyOf と一致する（表示箇所でずれない）', () => {

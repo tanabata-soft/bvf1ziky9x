@@ -3,7 +3,7 @@
 import type { AgeBand, Appearance, Element, FormType, FortuneStage, Gan, GlamourTier, ShiShen, Tone, YearFortune, Zhi } from './fortune';
 import {
   glamourTierOf, decideCharacter, yearFortune,
-  GAN_ELEMENT, ZHI_ELEMENT, SANGOU, GOU_PAIRS, ROKUGOU, KEI_PAIRS,
+  GAN_ELEMENT, ZHI_ELEMENT, ZHI_ANIMAL, SANGOU, GOU_PAIRS, ROKUGOU, KEI_PAIRS,
   TONE_OF_STAR, DARK_TONES, TONE_LABEL, toneOfChart,
   AGE_BAND_LABEL, AGE_BAND_RANGE, APPEARANCE_LABEL,
 } from './fortune';
@@ -101,6 +101,31 @@ export const DAY_ZHI_TRAIT: Record<Zhi, string> = {
   戌: '相棒の犬のように誠実で、仲間を守る気持ちの強い人です。',
   亥: '相棒の猪のようにまっすぐ突き進む情熱があり、決めたら迷わない強さがあります。',
 };
+
+/**
+ * お供（相棒）の短い意味（v0.2.12 で追加、解説つきシールの「装備の意味」末尾用）。
+ * DAY_ZHI_TRAIT の文面を装備行と同じ「〜の象徴」調に整えたもので、新しい主張は足さない。
+ */
+export const COMPANION_MEANING: Record<Zhi, string> = {
+  子: '機敏さと勘の良さの象徴',
+  丑: '粘り強さと芯の強さの象徴',
+  寅: '堂々と前に出る勇気の象徴',
+  卯: '穏やかさと場を和ませる優しさの象徴',
+  辰: '大きな夢と発想の象徴',
+  巳: '鋭い洞察と本質を見抜く力の象徴',
+  午: '駆け抜ける勢いと行動の速さの象徴',
+  未: '温かさと思いやりの象徴',
+  申: '器用さと機転、遊び心の象徴',
+  酉: '几帳面さと丁寧さの象徴',
+  戌: '誠実さと仲間を守る気持ちの象徴',
+  亥: 'まっすぐ突き進む情熱の象徴',
+};
+
+/** お供の説明行（解説つきシール専用。根拠の日支を添える） */
+export function companionLineOf(chart: Chart): string {
+  const zhi = chart.dayZhi;
+  return `お供の${ZHI_ANIMAL[zhi]}：${COMPANION_MEANING[zhi]}です（日支 ${zhi}）`;
+}
 
 /** 性格文（解説つきシール用）: 日干の要約＋季節感／最強の星／日支の一節 */
 export function personalityTextsOf(chart: Chart): string[] {
@@ -200,6 +225,7 @@ export function explainedInfoOf(chart: Chart, year: number, ageBand: AgeBand = '
       ...[spec.mainEq, ...spec.subEq].map((p) =>
         `${EQUIPMENT[p.shiShen].name}（${p.shiShen}）：${EQUIPMENT[p.shiShen].meaning}`),
       `お守りのリボンチャーム：足りない五行「${spec.charmElement}」を補い、バランスを整えるお守りです`,
+      companionLineOf(chart), // v0.2.12: お供（相棒）の説明を末尾に追加（オーナー指摘「お供の説明ないの？」）
     ],
     footer: '命式シール（仮）― 四柱推命をもとにした贈り物シールです',
     mainColor: chart.strongestElement,
