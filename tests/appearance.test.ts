@@ -21,7 +21,7 @@ describe('見た目の呪文への反映', () => {
   });
 
   it('男の子指定ではアイドルのような顔立ちの若者の表現が入る（精霊型）', () => {
-    const p = buildPrompt(chart, spec, 3, 'hero', 'boy');
+    const p = buildPrompt(chart, spec, 3, 'knight', 'boy');
     expect(p.prompt).toContain('a handsome young male fairy spirit character with an idol-like face');
     expect(p.prompt).not.toContain('small boy');
     expect(p.prompt).toContain('clearly drawn irises');
@@ -33,7 +33,7 @@ describe('見た目の呪文への反映', () => {
   });
 
   it('女の子指定ではアイドルのような顔立ちの若者の表現が入る（精霊型）', () => {
-    const p = buildPrompt(chart, spec, 3, 'hero', 'girl');
+    const p = buildPrompt(chart, spec, 3, 'knight', 'girl');
     expect(p.prompt).toContain('a beautiful young female fairy spirit character with an idol-like face');
     expect(p.prompt).not.toContain('little girl');
     expect(p.prompt).toContain('large detailed eyes');
@@ -47,7 +47,7 @@ describe('見た目の呪文への反映', () => {
 
   it('顔立ちは少しリアル寄りで整った方向の描き込み表現が入る（男女共通）', () => {
     for (const a of ['boy', 'girl'] as const) {
-      const p = buildPrompt(chart, spec, 3, 'hero', a);
+      const p = buildPrompt(chart, spec, 3, 'knight', a);
       expect(p.prompt).toContain('slightly realistic');
       expect(p.prompt).toContain('well-defined facial features');
       expect(p.prompt).toContain('clearly drawn irises');
@@ -59,33 +59,33 @@ describe('見た目の呪文への反映', () => {
 
   it('人型・精霊型の男女は約3頭身で少し大人びた比率、指定なしは約2.5頭身のまま', () => {
     for (const a of ['boy', 'girl'] as const) {
-      const p = buildPrompt(chart, spec, 3, 'hero', a);
+      const p = buildPrompt(chart, spec, 3, 'knight', a);
       expect(p.prompt).toContain('about 3 heads tall, with slightly more mature proportions');
       expect(p.prompt).not.toContain('2.5 heads tall');
     }
-    const none = buildPrompt(chart, spec, 3, 'hero', 'none');
+    const none = buildPrompt(chart, spec, 3, 'knight', 'none');
     expect(none.prompt).toContain('about 2.5 heads tall');
     expect(none.prompt).not.toContain('3 heads tall');
     // 獣型など他形態では比率指定は変えない
-    const beast = buildPrompt(chart, { ...spec, form: '獣型' as const }, 3, 'hero', 'girl');
+    const beast = buildPrompt(chart, { ...spec, form: '獣型' as const }, 3, 'knight', 'girl');
     expect(beast.prompt).toContain('about 2.5 heads tall');
   });
 
   it('男女指定時のネガティブには単独 realistic が無く、写真系の禁止は残る', () => {
     const tokens = (n: string) => n.split(',').map((s) => s.trim());
     for (const a of ['boy', 'girl'] as const) {
-      const p = buildPrompt(chart, spec, 3, 'hero', a);
+      const p = buildPrompt(chart, spec, 3, 'knight', a);
       expect(tokens(p.negative)).not.toContain('realistic');
       expect(p.negative).toContain('photorealistic');
       expect(p.negative).toContain('photograph');
       expect(p.negative).toContain('3d render');
     }
     // 指定なしは従来どおり realistic を含む
-    const none = buildPrompt(chart, spec, 3, 'hero', 'none');
+    const none = buildPrompt(chart, spec, 3, 'knight', 'none');
     expect(tokens(none.negative)).toContain('realistic');
     // negativePromptOf の直接指定でも同じ
-    expect(tokens(negativePromptOf('hero', 'boy'))).not.toContain('realistic');
-    expect(tokens(negativePromptOf('hero'))).toContain('realistic');
+    expect(tokens(negativePromptOf('knight', 'boy'))).not.toContain('realistic');
+    expect(tokens(negativePromptOf('knight'))).toContain('realistic');
   });
 
   it('歌手系の語は呪文に入らない（全形態・男女共通）', () => {
@@ -93,7 +93,7 @@ describe('見た目の呪文への反映', () => {
     const forms = ['人型', '精霊型', '獣型', '道具型', '群体型'] as const;
     for (const form of forms) {
       for (const a of ['boy', 'girl'] as const) {
-        const p = buildPrompt(chart, { ...spec, form }, 3, 'hero', a);
+        const p = buildPrompt(chart, { ...spec, form }, 3, 'knight', a);
         for (const w of singerWords) {
           expect(p.prompt, `${form}/${a} に ${w} が入っている`).not.toContain(w);
         }
@@ -102,7 +102,7 @@ describe('見た目の呪文への反映', () => {
   });
 
   it('指定なしでは性別・顔立ちの表現が入らない（従来どおり）', () => {
-    const p = buildPrompt(chart, spec, 3, 'hero', 'none');
+    const p = buildPrompt(chart, spec, 3, 'knight', 'none');
     expect(p.prompt).toContain('a small floating fairy-like spirit character');
     expect(p.prompt).not.toContain('girl');
     expect(p.prompt).not.toContain('idol-like');
@@ -111,25 +111,25 @@ describe('見た目の呪文への反映', () => {
 
   it('獣型では性別表現を付けず、顔まわりの小さな差だけにする', () => {
     const beast = { ...spec, form: '獣型' as const };
-    const girl = buildPrompt(chart, beast, 3, 'hero', 'girl');
+    const girl = buildPrompt(chart, beast, 3, 'knight', 'girl');
     expect(girl.prompt).toContain('a small beast-like character standing upright');
     expect(girl.prompt).toContain('long eyelashes');
     expect(girl.prompt).toContain('soft gentle expression');
     expect(girl.prompt).toContain('cute ribbon');
     expect(girl.prompt).not.toContain('girl character');
     expect(girl.prompt).not.toContain('idol-like face');
-    const boy = buildPrompt(chart, beast, 3, 'hero', 'boy');
+    const boy = buildPrompt(chart, beast, 3, 'knight', 'boy');
     expect(boy.prompt).toContain('strong neat eyebrows');
     expect(boy.prompt).toContain('sparkling clear eyes');
     expect(boy.prompt).not.toContain('boy character');
     expect(boy.prompt).not.toContain('tiny little cap');
   });
 
-  it('見た目を変えてもトーンの前提は変わらない（ネガティブはトーン×見た目で決まる）', () => {
-    const p = buildPrompt(chart, spec, 3, 'villain', 'girl');
+  it('見た目を変えても職業の前提は変わらない（ネガティブは職業×見た目で決まる）', () => {
+    const p = buildPrompt(chart, spec, 3, 'darkknight', 'girl');
     expect(p.negative).not.toContain('dark mood');
     expect(p.negative).toContain('horror');
-    expect(p.prompt).toContain('little ruler of the battlefield');
+    expect(p.prompt).toContain('little dark knight');
     expect(p.prompt).toContain('a beautiful young female fairy spirit character with an idol-like face');
   });
 });

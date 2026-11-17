@@ -4,7 +4,7 @@ import type { Appearance, Element, FormType, FortuneStage, Gan, GlamourTier, Shi
 import {
   glamourTierOf, decideCharacter, yearFortune,
   GAN_ELEMENT, ZHI_ELEMENT, SANGOU, GOU_PAIRS, ROKUGOU, KEI_PAIRS,
-  TONE_OF_STAR, DARK_TONES,
+  TONE_OF_STAR, DARK_TONES, TONE_LABEL, toneOfChart,
 } from './fortune';
 import type { CharacterSpec, Chart } from './fortune';
 
@@ -172,6 +172,7 @@ export function fortuneBodyOf(chart: Chart, f: YearFortune): string[] {
 /** 解説つきシールに載せる情報一式（詳細画面の書き出しと一覧ビューアで共用する単一の生成処理） */
 export interface ExplainedTexts {
   personality: string[];
+  jobLine: string; // 職業（職業名＋短い理由）。v0.2.4 で追加（オーナー確定）
   fortuneHeading: string;
   fortuneBody: string[];
   equipLines: string[];
@@ -182,8 +183,10 @@ export interface ExplainedTexts {
 export function explainedInfoOf(chart: Chart, year: number): ExplainedTexts {
   const spec = decideCharacter(chart);
   const f = yearFortune(chart, year);
+  const tone = toneOfChart(chart);
   return {
     personality: personalityTextsOf(chart),
+    jobLine: `${TONE_LABEL[tone]} ― 最強の星「${chart.strongest}」は${toneReasonOf(chart.strongest)}`,
     fortuneHeading: `${f.year}年の運勢（${f.stage}）`,
     fortuneBody: fortuneBodyOf(chart, f),
     equipLines: [
@@ -217,22 +220,21 @@ export const EQUIPMENT: Record<ShiShen, EquipmentInfo> = {
 
 /**
  * プレフィックス称号（一番強い通変ごとに1つ）。
- * v0.2.2 までは通変×3トーンの30種だったが、v0.2.3 でトーンが星ごとの固有10種に
- * なったため、称号も星ごとにそのトーンの性格を反映した1つに統一した。
- * 旧30種のうち、その星のトーンに合うものを下書きの土台として採用している
- * （例：正官＝誇り高き騎士、偏印＝深淵の探求者）。
+ * v0.2.2 までは通変×3トーンの30種だったが、トーンが星ごとの固有のものになったため、
+ * 称号も星ごとに1つに統一した。v0.2.4 で職業（RPG の職業10種）と地続きの称号に見直した
+ * （例：正官＝誇り高き騎士、偏印＝深淵の探求者は既存が合っているため維持）。
  */
 export const PREFIX_TITLE: Record<ShiShen, string> = {
-  比肩: '孤高の挑み手',
-  劫財: '熱き競い手',
-  食神: 'ほほえむ作り手',
-  傷官: '鮮やかなる表現者',
-  偏財: '福を呼ぶ商い手',
-  正財: '堅実な蓄え手',
-  七殺: '闇の執行者',
+  比肩: '孤高の拳士',
+  劫財: '熱き闘士',
+  食神: 'ほほえむ歌い手',
+  傷官: '鮮やかなる魔法使い',
+  偏財: '福を呼ぶ盗み手',
+  正財: '誠実な商い手',
+  七殺: '闇の騎士',
   正官: '誇り高き騎士',
   偏印: '深淵の探求者',
-  正印: '慈しみの守り手',
+  正印: '慈悲深き僧侶',
 };
 
 export function prefixTitleOf(star: ShiShen): string {
@@ -337,63 +339,65 @@ const SPARKLE_JA: Record<GlamourTier, string> = {
   jackpot: '大当たり（星5相当）：豪華な虹色プリズム背景に強い光と宝石のきらめき',
 };
 
-// 固有トーンごとの情報（理由文・呪文の雰囲気文 EN/JA）。名称は fortune.ts の TONE_LABEL。
-// 雰囲気文はトーンごとに作り分ける。SDの可愛さは維持し、ホラーにはしない（オーナー決定 2026-11-15）
+// 職業ごとの情報（理由文・呪文の雰囲気／装い文 EN/JA）。名称は fortune.ts の TONE_LABEL。
+// 雰囲気文には職業らしい装いを反映するが、装備ルール（何を持つか・大きさ・持ち方）が
+// 最優先で、装いはそれと矛盾しない範囲の雰囲気づけに留める。
+// SDの可愛さは維持し、ホラーにはしない（オーナー決定 2026-11-15）
 export interface ToneInfo {
-  reason: string; // そのトーンになる理由（最強の星の性質）
-  moodEn: string; // 呪文に入れる雰囲気文（英語）
+  reason: string; // その職業になる理由（最強の星の性質）
+  moodEn: string; // 呪文に入れる雰囲気／装い文（英語）
   moodJa: string; // 部品の日本語併記
 }
 export const TONE_INFO: Record<Tone, ToneInfo> = {
-  hero: {
-    reason: '名誉と秩序の星',
-    moodEn: 'The mood is bright and gallant, like an orthodox hero: an upright, dignified bearing, a sincere shining smile, and clean, noble colors.',
-    moodJa: 'ヒーロー（正統派）：明るく凛々しい正統派ヒーローの雰囲気、誠実な笑顔と気品のある色合い',
+  knight: {
+    reason: '名誉と秩序を重んじる星',
+    moodEn: 'The mood is bright and gallant, like a noble little knight: an upright, dignified bearing, a sincere shining smile, a small cape and light armor-like trims, and clean, noble colors.',
+    moodJa: '騎士：明るく凛々しい雰囲気、小さなマントと軽い鎧風の装い、誠実な笑顔',
   },
-  sage: {
-    reason: '慈しみと学びの星',
-    moodEn: 'The mood is calm and wise, like a gentle sage: a serene knowing smile, soft warm light, and quiet scholarly elegance.',
-    moodJa: '賢者：穏やかで知的な雰囲気、静かな微笑みと学ぶ者の気品',
+  priest: {
+    reason: '慈しみと守り、学びの星',
+    moodEn: 'The mood is calm and merciful, like a gentle little priest: a serene kind smile, white robe-like garments with soft gold trims, warm healing light, and a quiet, scholarly air.',
+    moodJa: '僧侶：穏やかで慈しみ深い雰囲気、白い法衣風の装いと温かい光、静かな微笑み',
   },
-  guardian: {
-    reason: '誠実に積み上げ、守る星',
-    moodEn: 'The mood is warm and dependable, like a steadfast guardian: a gentle reliable smile, steady earthy colors, and a protective, sheltering air.',
-    moodJa: '守り手：温かく頼れる雰囲気、穏やかな笑顔と守る安心感',
+  merchant: {
+    reason: '誠実に財を守り育てる星',
+    moodEn: 'The mood is warm and dependable, like an honest little merchant: a friendly trustworthy smile, neat tidy clothes with a small apron-like trim, steady earthy colors, and a careful, nurturing air.',
+    moodJa: '商人：温かく頼れる雰囲気、きちんとした身なりと小さな前掛け風の装い、誠実な笑顔',
   },
-  healer: {
-    reason: '温かく生み出し、分け与える星',
-    moodEn: 'The mood is soft and healing, like a kind maker who shares warmth: a tender relaxed smile, cozy gentle light, and a generous, nurturing air.',
-    moodJa: '癒し手：柔らかく温かい雰囲気、ほっとする笑顔と分け与える優しさ',
+  bard: {
+    reason: '生み出して楽しませる星',
+    moodEn: 'The mood is joyful and musical, like a cheerful little bard poet: a bright singing smile, a light traveling outfit with a small feathered cap, cozy warm colors, and a generous air that shares fun with everyone.',
+    moodJa: '吟遊詩人：明るく楽しい雰囲気、羽根つきの小さな帽子と旅装束、歌うような笑顔',
   },
-  lonewolf: {
-    reason: '自分の足で立つ自立の星',
-    moodEn: 'The mood is cool and independent, like a lone wolf: a calm, self-assured smirk, standing apart under a wide sky, with deep blue-grey accents. Cute and charming, never horror.',
-    moodJa: '一匹狼：クールで独立した雰囲気、静かな自信と青灰の差し色（可愛さは維持、ホラーにはしない）',
+  fighter: {
+    reason: '武器に頼らず自分の体で立つ、自立の星',
+    moodEn: 'The mood is bold and disciplined, like a little martial artist who relies on their own body: a confident determined grin, a simple training outfit with wrapped fists, deep blue-grey accents, and a self-reliant air. Cute and charming, never horror.',
+    moodJa: '武闘家：凛々しく自立した雰囲気、道着風の装いと拳の包帯、青灰の差し色（可愛さは維持、ホラーにはしない）',
   },
-  gambler: {
+  gladiator: {
     reason: '熱い勝負の星',
-    moodEn: 'The mood is bold and fiery, like a passionate gambler who loves a good contest: an excited competitive grin, ember-red accents, and a restless, energetic air. Cute and charming, never horror.',
-    moodJa: '勝負師：熱く大胆な雰囲気、勝負を楽しむ笑顔と炎のような差し色（可愛さは維持、ホラーにはしない）',
+    moodEn: 'The mood is hot and fearless, like a passionate little gladiator: an excited competitive grin, a light arena outfit with a bold sash, ember-red accents, and a restless, energetic air. Cute and charming, never horror.',
+    moodJa: '闘士：熱く大胆な雰囲気、軽い闘技装束と大胆な帯、炎のような差し色（可愛さは維持、ホラーにはしない）',
   },
-  rebel: {
-    reason: '権威に逆らう反骨の才能',
-    moodEn: 'The mood is sharp and rebellious, like a defiant artist who answers to no authority: a cheeky fearless grin, vivid indigo accents, and a free, untamed air. Cute and charming, never horror.',
-    moodJa: '反逆者：鋭く自由な雰囲気、恐れ知らずの笑顔と藍の差し色（可愛さは維持、ホラーにはしない）',
+  mage: {
+    reason: '型破りの才能と言葉の力',
+    moodEn: 'The mood is brilliant and unconventional, like a little mage of words and wonders: a cheeky fearless grin, a pointed hat and flowing robe-like outfit, vivid indigo accents, and a free, untamed air. Cute and charming, never horror.',
+    moodJa: '魔法使い：型破りで自由な雰囲気、とんがり帽子とローブ風の装い、藍の差し色（可愛さは維持、ホラーにはしない）',
   },
-  trickster: {
-    reason: '型にはまらず流れを読む星',
-    moodEn: 'The mood is playful and unpredictable, like a cheerful trickster who reads the flow of fortune: a sly fun-loving grin, sparkling gem accents, and a light, ever-changing air. Cute and charming, never horror.',
-    moodJa: 'トリックスター：遊び心のある雰囲気、流れを読む笑顔と宝石のきらめき（可愛さは維持、ホラーにはしない）',
+  rogue: {
+    reason: '流れを読んで財を動かす星',
+    moodEn: 'The mood is playful and quick-witted, like a cheerful little rogue who reads the flow of fortune: a sly fun-loving grin, a light nimble outfit with a small hood and pouch, deep emerald accents, and an ever-changing air. Cute and charming, never horror.',
+    moodJa: '盗賊：遊び心のある雰囲気、小さなフードと小袋の軽い装い、深いエメラルドの差し色（可愛さは維持、ホラーにはしない）',
   },
-  villain: {
-    reason: '闘争と支配の星',
-    moodEn: 'The mood is dark and commanding, like a little ruler of the battlefield: a bold confident glare softened by cuteness, deep crimson and black accents, and an air of playful dominance. Cute and adorable, never horror.',
-    moodJa: 'ヴィラン：闇と支配の雰囲気、深紅と黒の差し色（可愛さは維持、ホラーにはしない）',
+  darkknight: {
+    reason: '闘争の星',
+    moodEn: 'The mood is dark and commanding, like a little dark knight: a bold confident glare softened by cuteness, dark armor-like trims and a deep crimson cape, and an air of playful dominance. Cute and adorable, never horror.',
+    moodJa: '暗黒騎士：闇と闘争の雰囲気、黒い鎧風の装いと深紅のマント（可愛さは維持、ホラーにはしない）',
   },
-  phantom: {
-    reason: '読めないひらめきと孤独の星',
-    moodEn: 'The mood is mysterious and dreamy, like an elusive illusionist: a quiet unreadable smile, deep purple and black accents, faint moonlit sparkles, and a solitary, enchanting air. Cute and adorable, never horror.',
-    moodJa: '幻惑者：読めない神秘的な雰囲気、紫と黒の差し色と月明かりのきらめき（可愛さは維持、ホラーにはしない）',
+  seer: {
+    reason: 'ひらめきと神秘の星',
+    moodEn: 'The mood is mysterious and dreamy, like a little fortune teller: a quiet unreadable smile, a soft hood and flowing cloth, deep purple accents, faint moonlit sparkles, and an enchanting, solitary air. Cute and adorable, never horror.',
+    moodJa: '占い師：神秘的な雰囲気、柔らかなフードと揺れる布、紫の差し色と月明かりのきらめき（可愛さは維持、ホラーにはしない）',
   },
 };
 
@@ -464,7 +468,7 @@ const APPEARANCE_JA: Record<FormType, Record<Appearance, string>> = {
   群体型: { none: '指定なし（AIにおまかせ）', boy: '男の子：凛々しい眉とキラキラした瞳の顔まわりだけ（無理な人型化はしない）', girl: '女の子：まつ毛と柔らかい表情、リボンの顔まわりだけ（無理な人型化はしない）' },
 };
 
-export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: Tone = 'hero', appearance: Appearance = 'none'): PromptParts {
+export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: Tone = 'knight', appearance: Appearance = 'none'): PromptParts {
   const dayPillar = chart.pillars[2];
   const expr = DISHI_EN[dayPillar.diShi] ?? 'a gentle expression';
   const main = EQUIPMENT[spec.mainEq.shiShen];
@@ -499,7 +503,7 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
   const partsJa = [
     { label: '画角', value: '正方形（1:1）。キャラと背景が正方形の全面に広がる' },
     { label: '背景の派手さ（レア度）', value: SPARKLE_JA[tier] },
-    { label: 'トーン', value: TONE_INFO[tone].moodJa },
+    { label: '職業', value: TONE_INFO[tone].moodJa },
     { label: '見た目', value: APPEARANCE_JA[spec.form][appearance] },
     { label: '本体（日干）', value: `${chart.dayGan}＝${BODY_EN[chart.dayGan]}（日干のモチーフ）` },
     { label: '形態', value: spec.form },

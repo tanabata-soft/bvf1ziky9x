@@ -14,18 +14,18 @@ export interface SealName {
   postfix: string; // '' のときは付けない（既定は付けない）
   tier: GlamourTier;
   mainColor: Element;
-  tone?: Tone; // 帯の色を決めるトーン（省略時はヒーロー＝五行色）
+  tone?: Tone; // 帯の色を決める職業（省略時は騎士＝五行色）
 }
 
-// 名前帯の色（v0.2.3：トーンごと）。明るい系（ヒーロー／賢者／守り手／癒し手）は
+// 名前帯の色（v0.2.4：職業ごと）。明るい系（騎士・僧侶・商人・吟遊詩人）は
 // 五行色ベースとし、この表にある影・闇系だけ濃色グラデーションにする。
 const BAND_GRADIENT: Partial<Record<Tone, [string, string, string]>> = {
-  lonewolf: ['#3a5a78', '#16222e', '#05090f'], // 一匹狼：青灰
-  gambler: ['#8a2b1d', '#3d130c', '#120503'], // 勝負師：炎の深紅
-  rebel: ['#2f3a9e', '#141a4d', '#04060f'], // 反逆者：藍
-  trickster: ['#0f5a4c', '#0a2e26', '#03100c'], // トリックスター：深いエメラルド
-  villain: ['#7a1630', '#33081a', '#0d0207'], // ヴィラン：深紅〜黒
-  phantom: ['#4a2166', '#1e0b33', '#07020f'], // 幻惑者：紫〜黒
+  fighter: ['#3a5a78', '#16222e', '#05090f'], // 武闘家：青灰
+  gladiator: ['#8a2b1d', '#3d130c', '#120503'], // 闘士：炎の深紅
+  mage: ['#2f3a9e', '#141a4d', '#04060f'], // 魔法使い：藍
+  rogue: ['#0f5a4c', '#0a2e26', '#03100c'], // 盗賊：深いエメラルド
+  darkknight: ['#7a1630', '#33081a', '#0d0207'], // 暗黒騎士：深紅〜黒
+  seer: ['#4a2166', '#1e0b33', '#07020f'], // 占い師：紫〜黒
 };
 
 const SIZE = 1080;
@@ -205,7 +205,7 @@ export function composeSeal(img: HTMLImageElement | HTMLCanvasElement, name: Sea
   ctx.save();
   roundRectPath(ctx, IN, IN, IN_SIZE, BAND_H, 36);
   ctx.clip();
-  const band = BAND_GRADIENT[name.tone ?? 'hero'];
+  const band = BAND_GRADIENT[name.tone ?? 'knight'];
   if (band) {
     const g = ctx.createLinearGradient(IN, IN, SIZE - IN, IN + BAND_H);
     g.addColorStop(0, band[0]); g.addColorStop(0.55, band[1]); g.addColorStop(1, band[2]);
@@ -265,6 +265,7 @@ export function loadImageFromUrl(src: string): Promise<HTMLImageElement> {
 
 export interface ExplainedInfo {
   personality: string[]; // 性格ひとこと（段落ごと）
+  jobLine: string; // 職業（職業名＋短い理由、1行）
   fortuneHeading: string; // 例: 2026年の運勢（吉）
   fortuneBody: string[]; // 運勢の短文（段落ごと）
   equipLines: string[]; // 装備の意味（1行=1装備、折り返し可）
@@ -317,6 +318,7 @@ export function composeExplainedSeal(sealImg: HTMLImageElement, info: ExplainedI
   };
   const sections: Section[] = [
     build('性格', info.personality),
+    build('職業', [info.jobLine]),
     build(info.fortuneHeading, info.fortuneBody),
     build('装備の意味', info.equipLines),
   ];

@@ -265,42 +265,42 @@ export function glamourTierOf(stars: number): GlamourTier {
   return 'normal';
 }
 
-// ---------- キャラのトーン（オーナー決定 2026-11-15、v0.2.3 で星ごとの固有トーンに変更） ----------
-// 形態（5型）とは別の軸。称号・呪文の雰囲気・シールの帯色がトーンで変わる。
+// ---------- キャラの職業（旧称トーン。オーナー決定 2026-11-15、v0.2.4 で RPG の職業10種に確定） ----------
+// 形態（5型）とは別の軸。称号・呪文の雰囲気・シールの帯色が職業で変わる。
 // v0.2.2 までは共通3種（通常／ダークヒーロー／ヴィラン）を利用者が切り替えられたが、
-// v0.2.3 からは最強の通変ごとに固有の10種とし、利用者は選ばず常に命式から決まる
+// 利用者は選ばず、最強の通変ごとに固有の「RPG の職業」が常に命式から一意に決まる
 // 「占いの結果」として扱う（オーナー決定）。理由文・雰囲気文は texts.ts の TONE_INFO に持つ。
+// コード上の型名・関数名は互換のため Tone 系のまま（保存データの tone フィールドとも対応）。
 
 export type Tone =
-  | 'hero' // 正官：ヒーロー（正統派）
-  | 'sage' // 正印：賢者
-  | 'guardian' // 正財：守り手
-  | 'healer' // 食神：癒し手
-  | 'lonewolf' // 比肩：一匹狼
-  | 'gambler' // 劫財：勝負師
-  | 'rebel' // 傷官：反逆者
-  | 'trickster' // 偏財：トリックスター
-  | 'villain' // 七殺：ヴィラン
-  | 'phantom'; // 偏印：幻惑者
+  | 'knight' // 正官：騎士
+  | 'priest' // 正印：僧侶
+  | 'merchant' // 正財：商人
+  | 'bard' // 食神：吟遊詩人
+  | 'fighter' // 比肩：武闘家
+  | 'gladiator' // 劫財：闘士
+  | 'mage' // 傷官：魔法使い
+  | 'rogue' // 偏財：盗賊
+  | 'darkknight' // 七殺：暗黒騎士
+  | 'seer'; // 偏印：占い師
 
 export const TONE_LABEL: Record<Tone, string> = {
-  hero: 'ヒーロー（正統派）', sage: '賢者', guardian: '守り手', healer: '癒し手',
-  lonewolf: '一匹狼', gambler: '勝負師', rebel: '反逆者', trickster: 'トリックスター',
-  villain: 'ヴィラン', phantom: '幻惑者',
+  knight: '騎士', priest: '僧侶', merchant: '商人', bard: '吟遊詩人', fighter: '武闘家',
+  gladiator: '闘士', mage: '魔法使い', rogue: '盗賊', darkknight: '暗黒騎士', seer: '占い師',
 };
 
-/** 最強の通変 → 固有トーン（一意に決まる） */
+/** 最強の通変 → 職業（一意に決まる） */
 export const TONE_OF_STAR: Record<ShiShen, Tone> = {
-  正官: 'hero', 正印: 'sage', 正財: 'guardian', 食神: 'healer', 比肩: 'lonewolf',
-  劫財: 'gambler', 傷官: 'rebel', 偏財: 'trickster', 七殺: 'villain', 偏印: 'phantom',
+  正官: 'knight', 正印: 'priest', 正財: 'merchant', 食神: 'bard', 比肩: 'fighter',
+  劫財: 'gladiator', 傷官: 'mage', 偏財: 'rogue', 七殺: 'darkknight', 偏印: 'seer',
 };
 
 /**
- * 影・闇系のトーン。ネガティブプロンプトでは "dark mood" の禁止を外し、
+ * 影・闇系の職業。ネガティブプロンプトでは "dark mood" の禁止を外し、
  * ホラー化防止の語に替える（texts.ts の negativePromptOf が使う）。
- * 明るい系（正官・正印・正財・食神＝hero／sage／guardian／healer）は含まない。
+ * 明るい系（騎士・僧侶・商人・吟遊詩人）は含まない。
  */
-export const DARK_TONES: Tone[] = ['lonewolf', 'gambler', 'rebel', 'trickster', 'villain', 'phantom'];
+export const DARK_TONES: Tone[] = ['fighter', 'gladiator', 'mage', 'rogue', 'darkknight', 'seer'];
 
 /** 最強の通変からトーンを決める */
 export function defaultToneOf(strongest: ShiShen): Tone {

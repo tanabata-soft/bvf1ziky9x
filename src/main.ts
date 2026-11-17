@@ -238,8 +238,11 @@ function renderReading(person: Person, opts: ReadingOpts): string {
   const chart = computeChart(person.birth);
   const spec = decideCharacter(chart);
   const rarity = rarityOf(chart);
-  // トーンは利用者が選ぶものではなく、常に最強の通変から決まる（v0.2.3〜）
+  // 職業は利用者が選ぶものではなく、常に最強の通変から決まる（v0.2.3〜）
   const tone = toneOfChart(chart);
+  // 設計欄の理由文は「最強の星『○○』は〜のため」の形に整える（オーナー確定の表示）
+  const jobReason = toneReasonOf(chart.strongest);
+  const jobBecause = jobReason.endsWith('星') ? jobReason.slice(0, -1) : `${jobReason}を持つ`;
   const dn = displayName(person.nickname, chart, opts.showPostfix);
   const prompt = buildPrompt(chart, spec, rarity.stars, tone, opts.appearance);
   const tier = glamourTierOf(rarity.stars);
@@ -327,7 +330,7 @@ function renderReading(person: Person, opts: ReadingOpts): string {
       <li><strong>紋章</strong>：年支「${spec.crestZhi}」の刺繍</li>
       <li><strong>背景の季節</strong>：月支から「${SEASON_JA[seasonOf(spec.seasonZhi)]}」</li>
       <li><strong>素の表情</strong>：日柱の十二運「${dayPillar.diShi}」</li>
-      <li><strong>トーン</strong>：${TONE_LABEL[tone]} ― 一番強い星「${chart.strongest}」から決まります（${toneReasonOf(chart.strongest)}）。称号・呪文・シールの帯の色に反映されます</li>
+      <li><strong>職業</strong>：${TONE_LABEL[tone]} ― 最強の星『${chart.strongest}』は${jobBecause}ため。称号・呪文・シールの帯の色に反映されます</li>
     </ul>
   </section>
 

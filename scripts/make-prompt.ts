@@ -90,7 +90,7 @@ function main(): void {
   console.log(`命式：${pillarLine}（日干：${chart.dayGan}／出生時刻：${timeNote}）`);
   console.log(`形態：${spec.form}／メイン装備：${EQUIPMENT[spec.mainEq.shiShen].name}（${spec.mainEq.shiShen}）／サブ装備：${subLine}`);
   console.log(`補いのお守り：${spec.charmElement}の色のリボンチャーム／相棒：${ZHI_ANIMAL[spec.companionZhi]}（日支 ${spec.companionZhi}）／紋章：年支 ${spec.crestZhi}`);
-  console.log(`トーン：${TONE_LABEL[tone]}（最強の星・${chart.strongest}から自動決定：${toneReasonOf(chart.strongest)}）／見た目：${APPEARANCE_LABEL[appearance]}／レア度：星${rarity.stars}（${GLAMOUR_LABEL[glamourTierOf(rarity.stars)]}）`);
+  console.log(`職業：${TONE_LABEL[tone]}（最強の星・${chart.strongest}から自動決定：${toneReasonOf(chart.strongest)}）／見た目：${APPEARANCE_LABEL[appearance]}／レア度：星${rarity.stars}（${GLAMOUR_LABEL[glamourTierOf(rarity.stars)]}）`);
   console.log('');
   console.log('===== 呪文（英語プロンプト） =====');
   console.log(prompt.prompt);
