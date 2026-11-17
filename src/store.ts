@@ -21,6 +21,25 @@ export interface Entry {
 
 const KEY = 'meishikiSeal.entries.v1';
 
+/** 保存容量の不足で localStorage への書き込みができなかったことを表すエラー */
+export class StorageFullError extends Error {
+  constructor(message = '保存容量がいっぱいで保存できませんでした') {
+    super(message);
+    this.name = 'StorageFullError';
+  }
+}
+
+/** ブラウザが投げる容量不足エラー（QuotaExceededError 等）かどうか */
+export function isStorageFullError(e: unknown): boolean {
+  if (e instanceof StorageFullError) return true;
+  if (typeof e !== 'object' || e === null) return false;
+  const err = e as { name?: string; code?: number };
+  return err.name === 'QuotaExceededError'
+    || err.name === 'NS_ERROR_DOM_QUOTA_REACHED'
+    || err.code === 22 // 旧来の QUOTA_EXCEEDED_ERR
+    || err.code === 1014; // Firefox の NS_ERROR_DOM_QUOTA_REACHED
+}
+
 export function loadEntries(): Entry[] {
   try {
     const raw = localStorage.getItem(KEY);
@@ -40,7 +59,14 @@ export function hasSealImage(e: Entry): boolean {
 }
 
 export function saveEntries(entries: Entry[]): void {
-  localStorage.setItem(KEY, JSON.stringify(entries));
+  try {
+    localStorage.setItem(KEY, JSON.stringify(entries));
+  } catch (e) {
+    // 容量不足は呼び出し側で対処できるよう専用エラーに変換する（v0.2.1）。
+    // それ以外（JSON 化の失敗など）はそのまま投げる。
+    if (isStorageFullError(e)) throw new StorageFullError();
+    throw e;
+  }
 }
 
 export function addEntry(e: Omit<Entry, 'id' | 'createdAt'>): Entry {
@@ -66,4 +92,35 @@ export function updateEntry(id: string, patch: Partial<Entry>): Entry | undefine
 
 export function getEntry(id: string): Entry | undefined {
   return loadEntries().find((e) => e.id === id);
+}
+
+/** 登録を1件削除する（容量を空ける導線。詳細画面から使う） */
+export function deleteEntry(id: string): void {
+  saveEntries(loadEntries().filter((e) => e.id !== id));
+}
+
+/**
+ * 完成シールの保存を、候補（大きい順の dataURL）を順に試しながら行う。
+ * 容量不足で失敗したら次の候補（より小さい dataURL）で再試行する。
+ * 保存できたら { dataUrl, index }、全候補で保存できなければ null を返す。
+ * 候補は必要になるまで作らない（makeCandidate は成功するまで順に呼ばれる）。
+ * 容量不足以外のエラーはそのまま投げる。
+ */
+export function tryUpdateEntryImage(
+  id: string,
+  candidateCount: number,
+  makeCandidate: (index: number) => string,
+): { dataUrl: string; index: number } | null {
+  for (let i = 0; i < candidateCount; i++) {
+    const dataUrl = makeCandidate(i);
+    try {
+      const updated = updateEntry(id, { image: dataUrl, status: 'done' });
+      if (!updated) return null; // 対象の登録が無い
+      return { dataUrl, index: i };
+    } catch (e) {
+      if (isStorageFullError(e)) continue; // 次の候補で再試行
+      throw e;
+    }
+  }
+  return null;
 }

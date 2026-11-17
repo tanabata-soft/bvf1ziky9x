@@ -151,6 +151,11 @@ button.btn-fail {
 }
 .success { color: #2e7d4f; font-size: 13px; }
 
+/* 削除ボタン（v0.2.1）: 危険な操作だと一目で分かる色にする */
+button.danger {
+  background: #fdf1f1; border-color: #d9a5a5; color: #b03030;
+}
+
 /* 切り抜き調整エディタ（v0.1.8） */
 .crop-editor { margin-top: 14px; }
 .crop-editor canvas {

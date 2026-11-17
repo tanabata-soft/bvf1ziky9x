@@ -376,6 +376,34 @@ export function canvasToDataUrl(canvas: HTMLCanvasElement): string {
   return canvas.toDataURL('image/jpeg', 0.88);
 }
 
+export interface SealEncodeStep { size: number; quality: number }
+
+/**
+ * 完成シールを端末に保存するときのエンコード段階（大きい順）。
+ * 標準は 1080×1080・品質0.85（v0.2.0 の 0.88 から微減。贈る用途の見た目は損なわない範囲）。
+ * 保存容量が足りないときは、次の段階（低品質→縮小）で自動で再試行する（v0.2.1）。
+ */
+export const SEAL_SAVE_STEPS: readonly SealEncodeStep[] = [
+  { size: 1080, quality: 0.85 },
+  { size: 1080, quality: 0.72 },
+  { size: 864, quality: 0.72 },
+  { size: 864, quality: 0.6 },
+  { size: 720, quality: 0.6 },
+];
+
+/** 合成済みシール Canvas を、指定した大きさ・品質の JPEG dataURL にする */
+export function encodeSealCanvas(canvas: HTMLCanvasElement, step: SealEncodeStep): string {
+  if (step.size === canvas.width && step.size === canvas.height) {
+    return canvas.toDataURL('image/jpeg', step.quality);
+  }
+  const c = document.createElement('canvas');
+  c.width = step.size;
+  c.height = step.size;
+  const ctx = c.getContext('2d')!;
+  ctx.drawImage(canvas, 0, 0, step.size, step.size);
+  return c.toDataURL('image/jpeg', step.quality);
+}
+
 /** シール画像のダウンロード／共有 */
 export async function exportSeal(dataUrl: string, filename: string): Promise<void> {
   try {

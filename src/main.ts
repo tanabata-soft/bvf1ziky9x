@@ -11,13 +11,17 @@ import {
 } from './texts';
 import { silhouetteSvg } from './silhouette';
 import { buildDisplayName } from './name';
-import { loadImage, loadImageFromUrl, composeSeal, composeExplainedSeal, canvasToDataUrl, exportSeal } from './seal';
+import {
+  loadImage, loadImageFromUrl, composeSeal, composeExplainedSeal, canvasToDataUrl, exportSeal,
+  encodeSealCanvas, SEAL_SAVE_STEPS,
+} from './seal';
 import {
   defaultCropState, clampCropState, panCropState, zoomCropStateAt, cropSourceRect, applyCrop,
   coverScale, type CropViewState,
 } from './crop';
 import {
   loadEntries, addEntry, updateEntry, getEntry, hasSealImage,
+  deleteEntry, tryUpdateEntryImage,
   type Entry,
 } from './store';
 import { setupUpdateBanner } from './pwa';
@@ -46,6 +50,8 @@ let transientShowPostfix = false;
 let transientTone: Tone | null = null;
 // 今回だけモードの見た目（既定は指定なし）
 let transientAppearance: Appearance = 'none';
+// 詳細画面に一度だけ出すお知らせ（小さく保存したとき等）
+let detailFlash = '';
 
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -145,6 +151,7 @@ function renderInput() {
         <label class="check"><input type="radio" name="save" value="once"> 今回だけ（保存しない）</label>
       </fieldset>
       <button type="submit" class="primary">占う</button>
+      <div id="inputError"></div>
     </form>
     <section class="notes card">
       <h2>計算について</h2>
@@ -175,10 +182,19 @@ function renderInput() {
     const appearance = (app.querySelector<HTMLInputElement>('input[name="appearance"]:checked')?.value ?? 'none') as Appearance;
     const save = (app.querySelector<HTMLInputElement>('input[name="save"]:checked')!).value === 'save';
     if (save) {
-      const entry = addEntry({
-        nickname, y, m, d, hour, minute, status: 'waiting', appearance,
-      });
-      route = { name: 'detail', id: entry.id };
+      try {
+        const entry = addEntry({
+          nickname, y, m, d, hour, minute, status: 'waiting', appearance,
+        });
+        route = { name: 'detail', id: entry.id };
+      } catch {
+        // 保存容量がいっぱい等で登録を作れなかったときは、その場で理由を出す（無言で止めない）
+        const err = app.querySelector('#inputError');
+        if (err) {
+          err.innerHTML = '<p class="error">保存容量がいっぱいで、コレクションに保存できませんでした。シール帳から不要な登録を開いて「この登録を削除する」を押すと空きができます。または「今回だけ」を選ぶと、保存せずに結果が見られます。</p>';
+        }
+        return;
+      }
     } else {
       transientImage = undefined;
       transientShowPostfix = false;
@@ -190,6 +206,9 @@ function renderInput() {
   });
 }
 
+// 画像登録の結果。reduced=true は容量に合わせて小さい段階で保存したことを表す
+type RegisterOutcome = { ok: true; reduced: boolean } | { ok: false };
+
 // ---------- 読みの描画（結果・詳細で共用） ----------
 interface ReadingOpts {
   image?: string;
@@ -200,7 +219,7 @@ interface ReadingOpts {
   onTogglePostfix: (show: boolean) => void;
   onToneChange: (tone: Tone) => void;
   onAppearanceChange: (appearance: Appearance) => void;
-  onRegisterImage: (dataUrl: string) => void;
+  onRegisterImage: (seal: HTMLCanvasElement) => Promise<RegisterOutcome>;
   onExport?: () => Promise<void> | void;
   onSent?: () => void;
 }
@@ -422,7 +441,7 @@ function bindReading(person: Person, opts: ReadingOpts) {
 function openCropEditor(
   img: HTMLImageElement,
   name: Parameters<typeof composeSeal>[1],
-  onDone: (dataUrl: string) => void,
+  onDone: (seal: HTMLCanvasElement) => Promise<RegisterOutcome>,
 ) {
   const area = app.querySelector<HTMLElement>('#cropArea');
   if (!area) return;
@@ -535,17 +554,45 @@ function openCropEditor(
     draw();
   });
 
-  const finish = (source: HTMLImageElement | HTMLCanvasElement) => {
+  // 合成→登録までを例外処理で包み、「合成しています…」のまま止まる経路をなくす（v0.2.1）。
+  // 登録側（onDone）が保存できなかった場合は、合成したシールをその場で書き出せる逃がしを出す。
+  const finish = async (source: HTMLImageElement | HTMLCanvasElement) => {
     const msg = area.querySelector('#cropMsg');
     if (msg) msg.innerHTML = '<p class="small">シールを合成しています…</p>';
-    const seal = composeSeal(source, name);
-    onDone(canvasToDataUrl(seal));
+    let seal: HTMLCanvasElement;
+    try {
+      seal = composeSeal(source, name);
+    } catch {
+      if (msg) msg.innerHTML = '<p class="error">シールの合成に失敗しました。もう一度お試しください。</p>';
+      return;
+    }
+    let outcome: RegisterOutcome;
+    try {
+      outcome = await onDone(seal);
+    } catch {
+      outcome = { ok: false };
+    }
+    if (outcome.ok) return; // 成功時は登録側が画面を切り替える
+    if (msg) {
+      msg.innerHTML = `
+        <p class="error">保存容量がいっぱいで、この端末に保存できませんでした。</p>
+        <p class="small">作ったシールは下のボタンから共有／ダウンロードできます（このままでは端末には保存されません）。空きを作るには、シール帳から不要な登録を開いて「この登録を削除する」を押してください。</p>
+        <div class="actions">
+          <button class="primary" id="cropExportFallback">作ったシールを共有／ダウンロード</button>
+        </div>`;
+      msg.querySelector('#cropExportFallback')?.addEventListener('click', async (ev) => {
+        const btn = ev.currentTarget as HTMLButtonElement;
+        await withButtonFeedback(btn, '書き出しています…', '書き出しました ✓', async () => {
+          await exportSeal(encodeSealCanvas(seal, SEAL_SAVE_STEPS[0]), `seal-${name.nickname}.jpg`);
+        });
+      });
+    }
   };
   area.querySelector('#cropOk')?.addEventListener('click', () => {
     state = clampCropState(state, VIEW, imgW, imgH);
-    finish(applyCrop(img, cropSourceRect(state, VIEW, imgW, imgH)));
+    void finish(applyCrop(img, cropSourceRect(state, VIEW, imgW, imgH)));
   });
-  area.querySelector('#cropWhole')?.addEventListener('click', () => { finish(img); });
+  area.querySelector('#cropWhole')?.addEventListener('click', () => { void finish(img); });
   area.querySelector('#cropCancel')?.addEventListener('click', () => { area.innerHTML = ''; });
 }
 
@@ -560,7 +607,12 @@ function renderResult(person: Person) {
     onTogglePostfix: (show) => { transientShowPostfix = show; render(); },
     onToneChange: (tone) => { transientTone = tone; render(); },
     onAppearanceChange: (appearance) => { transientAppearance = appearance; render(); },
-    onRegisterImage: (dataUrl) => { transientImage = dataUrl; render(); },
+    onRegisterImage: async (seal) => {
+      // 今回だけモードは端末に保存しないので、標準の大きさでメモリに持つだけ
+      transientImage = encodeSealCanvas(seal, SEAL_SAVE_STEPS[0]);
+      render();
+      return { ok: true, reduced: false };
+    },
     onExport: () => (transientImage ? exportSeal(transientImage, `seal-${person.nickname}.jpg`) : undefined),
   };
   app.innerHTML = `${headerHtml()}<main>
@@ -569,6 +621,11 @@ function renderResult(person: Person) {
   </main>`;
   bindNav();
   bindReading(person, opts);
+}
+
+/** 設定変更の保存：容量不足などで失敗しても画面操作自体は止めない（変更は保持されず、表示は読み込み直しで元に戻る） */
+function safeUpdateEntry(id: string, patch: Partial<Entry>): void {
+  try { updateEntry(id, patch); } catch { /* 保存できない状態では変更を諦める */ }
 }
 
 // ---------- 詳細画面 ----------
@@ -586,22 +643,61 @@ function renderDetail(id: string) {
     showPostfix: entry.showPostfix ?? false,
     tone: entry.tone ?? defaultToneOf(chart.strongest),
     appearance: entry.appearance ?? 'none',
-    onTogglePostfix: (show) => { updateEntry(id, { showPostfix: show }); render(); },
-    onToneChange: (tone) => { updateEntry(id, { tone }); render(); },
-    onAppearanceChange: (appearance) => { updateEntry(id, { appearance }); render(); },
-    onRegisterImage: (dataUrl) => {
-      updateEntry(id, { image: dataUrl, status: 'done' });
+    onTogglePostfix: (show) => { safeUpdateEntry(id, { showPostfix: show }); render(); },
+    onToneChange: (tone) => { safeUpdateEntry(id, { tone }); render(); },
+    onAppearanceChange: (appearance) => { safeUpdateEntry(id, { appearance }); render(); },
+    onRegisterImage: async (seal) => {
+      // 容量が足りなければ、より小さい段階の dataURL で自動で再試行する（v0.2.1）
+      const saved = tryUpdateEntryImage(
+        id, SEAL_SAVE_STEPS.length, (i) => encodeSealCanvas(seal, SEAL_SAVE_STEPS[i]),
+      );
+      if (!saved) return { ok: false }; // 全段階で保存できなかった。切り抜き画面側で逃がし導線を出す
+      if (saved.index > 0) {
+        detailFlash = '保存容量に合わせて、少し小さいサイズで保存しました。';
+      }
       render();
+      return { ok: true, reduced: saved.index > 0 };
     },
     onExport: () => (entry.image ? exportSeal(entry.image, `seal-${entry.nickname}.jpg`) : undefined),
-    onSent: entry.status === 'done' ? () => { updateEntry(id, { status: 'sent' }); render(); } : undefined,
+    onSent: entry.status === 'done' ? () => { safeUpdateEntry(id, { status: 'sent' }); render(); } : undefined,
   };
+  const flash = detailFlash;
+  detailFlash = '';
   app.innerHTML = `${headerHtml()}<main>
     <button class="back" data-nav="list">← シール帳へ戻る</button>
+    ${flash ? `<p class="success">${esc(flash)}</p>` : ''}
     ${renderReading(person, opts)}
+    <section class="card danger-zone">
+      <h2>この登録を削除する</h2>
+      <p class="small">この登録をシール帳から削除します。完成したシールの画像も消え、元に戻せません。保存容量を空けたいときにも使えます。</p>
+      <div id="deleteArea">
+        <button id="deleteEntryBtn" class="danger">この登録を削除する</button>
+      </div>
+    </section>
   </main>`;
   bindNav();
   bindReading(person, opts);
+  // 削除は2段階確認（押し間違いで消えないように）
+  const deleteArea = app.querySelector<HTMLElement>('#deleteArea');
+  app.querySelector('#deleteEntryBtn')?.addEventListener('click', () => {
+    if (!deleteArea) return;
+    deleteArea.innerHTML = `
+      <p class="error">本当に削除しますか？</p>
+      <div class="actions">
+        <button id="deleteConfirmBtn" class="danger">削除する</button>
+        <button id="deleteCancelBtn">やめる</button>
+      </div>`;
+    deleteArea.querySelector('#deleteCancelBtn')?.addEventListener('click', () => { render(); });
+    deleteArea.querySelector('#deleteConfirmBtn')?.addEventListener('click', () => {
+      try {
+        deleteEntry(id);
+        route = { name: 'list' };
+        render();
+      } catch {
+        deleteArea.innerHTML = '<p class="error">削除できませんでした。もう一度お試しください。</p>';
+      }
+    });
+  });
 }
 
 // ---------- シール帳 ----------
