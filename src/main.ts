@@ -12,11 +12,15 @@ import { silhouetteSvg } from './silhouette';
 import { buildDisplayName } from './name';
 import { loadImage, loadImageFromUrl, composeSeal, composeExplainedSeal, canvasToDataUrl, exportSeal } from './seal';
 import {
+  defaultCropState, clampCropState, panCropState, zoomCropStateAt, cropSourceRect, applyCrop,
+  coverScale, type CropViewState,
+} from './crop';
+import {
   loadEntries, addEntry, updateEntry, getEntry,
   type Entry,
 } from './store';
 
-const APP_VERSION = '0.1.7';
+const APP_VERSION = '0.1.8';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 interface Person {
@@ -130,7 +134,7 @@ function renderInput() {
       <fieldset>
         <legend>キャラの見た目</legend>
         <p class="small">占う相手の性別ではなく、作る分身キャラの見た目の指定です。呪文（プロンプト）にだけ効きます。</p>
-        ${(['none', 'boy', 'girl'] as Appearance[]).map((a) => `<label class="check"><input type="radio" name="appearance" value="${a}" ${a === 'none' ? 'checked' : ''}> ${APPEARANCE_LABEL[a]}</label>`).join('')}
+        ${(['none', 'boy', 'girl', 'idol'] as Appearance[]).map((a) => `<label class="check"><input type="radio" name="appearance" value="${a}" ${a === 'none' ? 'checked' : ''}> ${APPEARANCE_LABEL[a]}</label>`).join('')}
       </fieldset>
       <fieldset>
         <legend>この結果の扱い</legend>
@@ -251,7 +255,7 @@ function renderReading(person: Person, opts: ReadingOpts): string {
     <label class="check small"><input type="checkbox" id="postfixToggle" ${opts.showPostfix ? 'checked' : ''}> 後ろの称号「・${esc(dn.postfix)}」も付ける（基本は付けません）</label>
     <div class="tone-row"><span class="small">キャラのトーン：</span>${(['normal', 'dark', 'villain'] as Tone[]).map((t) => `<label class="check small"><input type="radio" name="toneSel" value="${t}" ${opts.tone === t ? 'checked' : ''}> ${TONE_LABEL[t]}</label>`).join('')}</div>
     <p class="small">トーンを変えると、称号・呪文・シールの帯の色が変わります。初期値は一番強い星からの提案です。</p>
-    <div class="tone-row"><span class="small">キャラの見た目：</span>${(['none', 'boy', 'girl'] as Appearance[]).map((a) => `<label class="check small"><input type="radio" name="appearanceSel" value="${a}" ${opts.appearance === a ? 'checked' : ''}> ${APPEARANCE_LABEL[a]}</label>`).join('')}</div>
+    <div class="tone-row"><span class="small">キャラの見た目：</span>${(['none', 'boy', 'girl', 'idol'] as Appearance[]).map((a) => `<label class="check small"><input type="radio" name="appearanceSel" value="${a}" ${opts.appearance === a ? 'checked' : ''}> ${APPEARANCE_LABEL[a]}</label>`).join('')}</div>
     <p class="small">見た目は分身キャラの見た目の指定で、呪文にだけ効きます（称号とシールは変わりません）。</p>
     ${opts.image ? '<p class="small">※ 完成済みシールへの反映は、画像を登録し直したときに行われます。</p>' : ''}
     <p class="small">形態：${spec.form} ／ レア度：<span class="stars">${'★'.repeat(rarity.stars)}${'☆'.repeat(5 - rarity.stars)}</span>（シールでは星ではなく「${GLAMOUR_LABEL[tier]}」の枠の派手さで表します）${opts.status ? ` ／ 状態：${opts.status === 'waiting' ? '画像待ち' : opts.status === 'done' ? '完成' : '贈った'}` : ''}</p>
@@ -298,6 +302,7 @@ function renderReading(person: Person, opts: ReadingOpts): string {
   <section class="card">
     <h2>キャラ生成の呪文（英語）</h2>
     <p class="small">お使いの画像生成AI（Gemini、ChatGPT、Museなど）にそのまま貼って使えます。名前は呪文に含まれていません。</p>
+    <p class="small">正方形で出るよう呪文に入れています。横長になった場合は、画像登録のときに切り抜き位置を選べます。</p>
     <ul class="parts">${prompt.partsJa.map((p) => `<li><strong>${esc(p.label)}</strong>：${esc(p.value)}</li>`).join('')}</ul>
     <pre class="prompt" id="promptText">${esc(prompt.prompt)}</pre>
     <button class="primary" id="copyPrompt">呪文をコピー</button>
@@ -308,8 +313,9 @@ function renderReading(person: Person, opts: ReadingOpts): string {
 
   <section class="card">
     <h2>画像を登録してシールを完成させる</h2>
-    <p class="small">生成した画像を選ぶと、絵全体が切れずに収まる形で名前帯と枠を合成します。レア度は星ではなく、枠の派手さ（ふつう／キラ／大当たり）で表れます。</p>
+    <p class="small">生成した画像を選ぶと、まず切り抜き調整の画面が出ます。正方形の範囲で切り抜くか、「全体を使う」で絵全体が切れずに収まる形（余白はプリズム背景）で合成するか選べます。レア度は星ではなく、枠の派手さ（ふつう／キラ／大当たり）で表れます。</p>
     <input type="file" id="imageFile" accept="image/*">
+    <div id="cropArea"></div>
     <div id="registerMsg"></div>
     ${opts.image ? '<p class="success">✓ シールが完成しています。画像を選ぶと差し替えできます。</p>' : ''}
     ${opts.image ? `<div class="actions">
@@ -355,20 +361,25 @@ function bindReading(person: Person, opts: ReadingOpts) {
   app.querySelectorAll<HTMLInputElement>('input[name="appearanceSel"]').forEach((r) => {
     r.addEventListener('change', () => { opts.onAppearanceChange(r.value as Appearance); });
   });
+  // 画像登録：選んだ直後に切り抜き調整を挟み、確定してから合成する（v0.1.8）
+  const sealName = () => ({
+    prefix: dn.prefix, nickname: person.nickname, postfix: opts.showPostfix ? dn.postfix : '',
+    tier: glamourTierOf(rarity.stars), mainColor: chart.strongestElement, tone: opts.tone,
+  });
   app.querySelector<HTMLInputElement>('#imageFile')?.addEventListener('change', async (ev) => {
-    const file = (ev.target as HTMLInputElement).files?.[0];
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
     if (!file) return;
     const msg = app.querySelector('#registerMsg')!;
-    msg.innerHTML = '<p class="small">シールを合成しています…</p>';
+    msg.innerHTML = '<p class="small">画像を読み込んでいます…</p>';
     try {
       const img = await loadImage(file);
-      const canvas = composeSeal(img, {
-        prefix: dn.prefix, nickname: person.nickname, postfix: opts.showPostfix ? dn.postfix : '',
-        tier: glamourTierOf(rarity.stars), mainColor: chart.strongestElement, tone: opts.tone,
-      });
-      opts.onRegisterImage(canvasToDataUrl(canvas));
+      msg.innerHTML = '';
+      openCropEditor(img, sealName(), opts.onRegisterImage);
     } catch {
       msg.innerHTML = '<p class="error">画像を読み込めませんでした。別の画像でお試しください。</p>';
+    } finally {
+      input.value = ''; // 同じファイルを選び直しても change が発火するように
     }
   });
   app.querySelector('#exportBtn')?.addEventListener('click', async (ev) => {
@@ -404,6 +415,139 @@ function bindReading(person: Person, opts: ReadingOpts) {
     }
   });
   app.querySelector('#sentBtn')?.addEventListener('click', () => { opts.onSent?.(); });
+}
+
+// ---------- 切り抜き調整エディタ（v0.1.8） ----------
+// 正方形のビューに画像を cover で置き、ドラッグで移動、スライダー／ピンチ／ホイールで拡縮する。
+// 計算は src/crop.ts の純粋関数に寄せ、ここは描画とイベントだけを持つ。
+function openCropEditor(
+  img: HTMLImageElement,
+  name: Parameters<typeof composeSeal>[1],
+  onDone: (dataUrl: string) => void,
+) {
+  const area = app.querySelector<HTMLElement>('#cropArea');
+  if (!area) return;
+  const VIEW = 640; // キャンバスの内部解像度（表示は CSS でフィット）
+  area.innerHTML = `
+  <div class="crop-editor">
+    <h3>切り抜き調整</h3>
+    <p class="small">ドラッグで位置を動かし、スライダー（またはピンチ）で大きさを変えて、正方形の範囲を選んでください。</p>
+    <canvas id="cropCanvas" width="${VIEW}" height="${VIEW}"></canvas>
+    <label class="crop-zoom">大きさ
+      <input type="range" id="cropZoom" min="100" max="400" step="1" value="100">
+    </label>
+    <div class="actions">
+      <button class="primary" id="cropOk">この範囲でシールを作る</button>
+      <button id="cropWhole">全体を使う（切り抜かない）</button>
+      <button id="cropCancel">やめる</button>
+    </div>
+    <div id="cropMsg"></div>
+  </div>`;
+  area.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  const canvas = area.querySelector<HTMLCanvasElement>('#cropCanvas')!;
+  const ctx = canvas.getContext('2d')!;
+  const slider = area.querySelector<HTMLInputElement>('#cropZoom')!;
+  const imgW = img.naturalWidth;
+  const imgH = img.naturalHeight;
+  let state: CropViewState = defaultCropState();
+
+  const draw = () => {
+    const s = coverScale(VIEW, imgW, imgH) * state.zoom;
+    ctx.fillStyle = '#22222e';
+    ctx.fillRect(0, 0, VIEW, VIEW);
+    ctx.drawImage(
+      img,
+      VIEW / 2 + state.dx - (imgW * s) / 2,
+      VIEW / 2 + state.dy - (imgH * s) / 2,
+      imgW * s, imgH * s,
+    );
+    // 三分割の目安線
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1;
+    for (const f of [1 / 3, 2 / 3]) {
+      ctx.beginPath(); ctx.moveTo(VIEW * f, 0); ctx.lineTo(VIEW * f, VIEW); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, VIEW * f); ctx.lineTo(VIEW, VIEW * f); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(1.5, 1.5, VIEW - 3, VIEW - 3);
+  };
+  draw();
+
+  // 表示px（CSSピクセル）→ キャンバス内部pxへの換算
+  const toCanvasPx = (clientX: number, clientY: number) => {
+    const r = canvas.getBoundingClientRect();
+    return {
+      x: (clientX - r.left) * (VIEW / r.width),
+      y: (clientY - r.top) * (VIEW / r.height),
+      scale: VIEW / r.width,
+    };
+  };
+
+  const pointers = new Map<number, { x: number; y: number }>();
+  let pinchDist = 0;
+  canvas.addEventListener('pointerdown', (ev) => {
+    canvas.setPointerCapture(ev.pointerId);
+    const p = toCanvasPx(ev.clientX, ev.clientY);
+    pointers.set(ev.pointerId, { x: p.x, y: p.y });
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+    }
+  });
+  canvas.addEventListener('pointermove', (ev) => {
+    const prev = pointers.get(ev.pointerId);
+    if (!prev) return;
+    const p = toCanvasPx(ev.clientX, ev.clientY);
+    if (pointers.size === 1) {
+      state = panCropState(state, p.x - prev.x, p.y - prev.y, VIEW, imgW, imgH);
+    }
+    pointers.set(ev.pointerId, { x: p.x, y: p.y });
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinchDist > 0 && dist > 0) {
+        const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        state = zoomCropStateAt(state, state.zoom * (dist / pinchDist), mid.x, mid.y, VIEW, imgW, imgH);
+        slider.value = String(Math.round(state.zoom * 100));
+      }
+      pinchDist = dist;
+    }
+    draw();
+  });
+  const endPointer = (ev: PointerEvent) => {
+    pointers.delete(ev.pointerId);
+    pinchDist = 0;
+  };
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
+  canvas.addEventListener('wheel', (ev) => {
+    ev.preventDefault();
+    const p = toCanvasPx(ev.clientX, ev.clientY);
+    const factor = ev.deltaY < 0 ? 1.08 : 1 / 1.08;
+    state = zoomCropStateAt(state, state.zoom * factor, p.x, p.y, VIEW, imgW, imgH);
+    slider.value = String(Math.round(state.zoom * 100));
+    draw();
+  }, { passive: false });
+
+  slider.addEventListener('input', () => {
+    state = zoomCropStateAt(state, Number(slider.value) / 100, VIEW / 2, VIEW / 2, VIEW, imgW, imgH);
+    draw();
+  });
+
+  const finish = (source: HTMLImageElement | HTMLCanvasElement) => {
+    const msg = area.querySelector('#cropMsg');
+    if (msg) msg.innerHTML = '<p class="small">シールを合成しています…</p>';
+    const seal = composeSeal(source, name);
+    onDone(canvasToDataUrl(seal));
+  };
+  area.querySelector('#cropOk')?.addEventListener('click', () => {
+    state = clampCropState(state, VIEW, imgW, imgH);
+    finish(applyCrop(img, cropSourceRect(state, VIEW, imgW, imgH)));
+  });
+  area.querySelector('#cropWhole')?.addEventListener('click', () => { finish(img); });
+  area.querySelector('#cropCancel')?.addEventListener('click', () => { area.innerHTML = ''; });
 }
 
 // ---------- 結果画面（今回だけ） ----------

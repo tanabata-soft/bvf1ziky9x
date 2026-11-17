@@ -117,8 +117,9 @@ function drawFrameOrnaments(ctx: CanvasRenderingContext2D, outer: number, inner:
   for (let y = outer + 56 + step / 2; y <= SIZE - outer - 56; y += step) put(SIZE - mid, y);
 }
 
-/** 生成画像＋名前帯を合成したシール（Canvas）を返す。レア度は枠の派手さで表し、星は描かない */
-export function composeSeal(img: HTMLImageElement, name: SealName): HTMLCanvasElement {
+/** 生成画像＋名前帯を合成したシール（Canvas）を返す。レア度は枠の派手さで表し、星は描かない。
+ *  img は切り抜き済み Canvas（v0.1.8 の切り抜き調整）でもよい */
+export function composeSeal(img: HTMLImageElement | HTMLCanvasElement, name: SealName): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = SIZE;
   canvas.height = SIZE;
@@ -179,9 +180,11 @@ export function composeSeal(img: HTMLImageElement, name: SealName): HTMLCanvasEl
       }
     }
   }
-  const scale = Math.min(IN_SIZE / img.naturalWidth, IMG_H / img.naturalHeight);
-  const w = img.naturalWidth * scale;
-  const h = img.naturalHeight * scale;
+  const srcW = (img as HTMLImageElement).naturalWidth || img.width;
+  const srcH = (img as HTMLImageElement).naturalHeight || img.height;
+  const scale = Math.min(IN_SIZE / srcW, IMG_H / srcH);
+  const w = srcW * scale;
+  const h = srcH * scale;
   ctx.drawImage(img, IN + (IN_SIZE - w) / 2, IMG_Y + (IMG_H - h) / 2, w, h);
   ctx.restore();
 

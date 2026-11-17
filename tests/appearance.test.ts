@@ -46,6 +46,33 @@ describe('見た目の呪文への反映', () => {
     expect(boy.prompt).not.toContain('boy character');
   });
 
+  it('イケメンアイドル指定では idol 向けの表現が入る（精霊型）', () => {
+    const p = buildPrompt(chart, spec, 3, 'normal', 'idol');
+    expect(p.prompt).toContain('a handsome young male idol fairy spirit character');
+    expect(p.prompt).toContain('headset microphone');
+    expect(p.prompt).toContain('star-shaped accessory');
+    expect(p.prompt).toContain('idol smile');
+    const ja = p.partsJa.find((x) => x.label === '見た目');
+    expect(ja?.value).toContain('イケメンアイドル');
+  });
+
+  it('イケメンアイドル指定（人型）では本体表現がアイドル風になる', () => {
+    const human = { ...spec, form: '人型' as const };
+    const p = buildPrompt(chart, human, 3, 'normal', 'idol');
+    expect(p.prompt).toContain('a handsome young male idol character');
+    expect(p.prompt).toContain('stage outfit');
+  });
+
+  it('獣型のイケメンアイドルは小さな雰囲気の差だけにする', () => {
+    const beast = { ...spec, form: '獣型' as const };
+    const p = buildPrompt(chart, beast, 3, 'normal', 'idol');
+    expect(p.prompt).toContain('a small beast-like character standing upright');
+    expect(p.prompt).toContain('tiny headset microphone');
+    expect(p.prompt).toContain('star-shaped charm');
+    expect(p.prompt).not.toContain('idol character');
+    expect(p.prompt).not.toContain('idol smile');
+  });
+
   it('見た目を変えてもトーン・称号まわりの前提は変わらない（ネガティブはトーンのみで決まる）', () => {
     const p = buildPrompt(chart, spec, 3, 'villain', 'girl');
     expect(p.negative).not.toContain('dark mood');

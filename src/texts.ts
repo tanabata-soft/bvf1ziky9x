@@ -219,7 +219,7 @@ const TONE_MOOD_JA: Record<Tone, string> = {
 // ネガティブプロンプトはトーンで出し分ける。通常は "dark mood" を禁止するが、
 // ダークヒーロー／ヴィランでは外し、代わりにホラー化だけを防ぐ語を入れる。
 const NEGATIVE_BASE =
-  'text, letters, words, alphabet, numbers, frame, border, logo, watermark, signature, realistic, photograph, 3d render, scary';
+  'text, letters, words, alphabet, numbers, frame, border, logo, watermark, signature, realistic, photograph, 3d render, scary, landscape orientation, wide image, portrait orientation, vertical image, letterbox, pillarbox';
 export function negativePromptOf(tone: Tone): string {
   return tone === 'normal'
     ? `${NEGATIVE_BASE}, dark mood`
@@ -229,38 +229,44 @@ export function negativePromptOf(tone: Tone): string {
 // 見た目（指定なし／男の子／女の子）の呪文への反映（オーナー決定 2026-11-15）。
 // 人型・精霊型ではキャラそのものを男の子／女の子として書き分ける。
 // 獣型・道具型・群体型では性別表現は付けず、小さな雰囲気の差だけにする。
-const APPEARANCE_FORM_EN: Partial<Record<FormType, Record<'boy' | 'girl', string>>> = {
-  人型: { boy: 'a small boy character', girl: 'a cute little girl character' },
-  精霊型: { boy: 'a small boy fairy spirit character', girl: 'a cute little girl fairy spirit character' },
+type AppearanceKey = Exclude<Appearance, 'none'>;
+const APPEARANCE_FORM_EN: Partial<Record<FormType, Record<AppearanceKey, string>>> = {
+  人型: { boy: 'a small boy character', girl: 'a cute little girl character', idol: 'a handsome young male idol character' },
+  精霊型: { boy: 'a small boy fairy spirit character', girl: 'a cute little girl fairy spirit character', idol: 'a handsome young male idol fairy spirit character' },
 };
-const APPEARANCE_EXTRA_EN: Record<FormType, Record<'boy' | 'girl', string>> = {
+const APPEARANCE_EXTRA_EN: Record<FormType, Record<AppearanceKey, string>> = {
   人型: {
     boy: 'Give him a boyish look with short hair and a neat, adventurous outfit.',
     girl: 'Give her a feminine look with long silky hair, a ribbon hair accessory and a pretty dress-like outfit with lace details.',
+    idol: 'Give him a dazzling handsome-idol look: a stylish sparkly stage outfit, a headset microphone, a star-shaped accessory, and a bright charming idol smile.',
   },
   精霊型: {
     boy: 'Give him a boyish look with short hair and a neat, adventurous outfit.',
     girl: 'Give her a feminine look with long silky hair, a ribbon hair accessory and a pretty dress-like outfit with lace details.',
+    idol: 'Give him a dazzling handsome-idol look: a stylish sparkly stage outfit, a headset microphone, a star-shaped accessory, and a bright charming idol smile.',
   },
   獣型: {
     boy: 'Add only a small boyish touch: a tiny little cap.',
     girl: 'Add only a small feminine touch: a cute ribbon and long eyelashes.',
+    idol: 'Add only a small idol touch: a tiny headset microphone and a star-shaped charm.',
   },
   道具型: {
     boy: 'Add only a small boyish touch: a tiny little cap.',
     girl: 'Add only a small feminine touch: a cute ribbon and long eyelashes.',
+    idol: 'Add only a small idol touch: a tiny headset microphone and a star-shaped charm.',
   },
   群体型: {
     boy: 'Add only a small boyish touch: tiny little caps.',
     girl: 'Add only a small feminine touch: cute ribbons and long eyelashes.',
+    idol: 'Add only a small idol touch: tiny headset microphones and star-shaped charms.',
   },
 };
 const APPEARANCE_JA: Record<FormType, Record<Appearance, string>> = {
-  人型: { none: '指定なし（AIにおまかせ）', boy: '男の子：男の子キャラとして、短い髪と活発な装い', girl: '女の子：女の子キャラとして、長い髪・リボン・ドレス風の装い' },
-  精霊型: { none: '指定なし（AIにおまかせ）', boy: '男の子：男の子の精霊として、短い髪と活発な装い', girl: '女の子：女の子の精霊として、長い髪・リボン・ドレス風の装い' },
-  獣型: { none: '指定なし（AIにおまかせ）', boy: '男の子：小さな帽子の雰囲気だけ（無理な人型化はしない）', girl: '女の子：リボンとまつ毛の雰囲気だけ（無理な人型化はしない）' },
-  道具型: { none: '指定なし（AIにおまかせ）', boy: '男の子：小さな帽子の雰囲気だけ（無理な人型化はしない）', girl: '女の子：リボンとまつ毛の雰囲気だけ（無理な人型化はしない）' },
-  群体型: { none: '指定なし（AIにおまかせ）', boy: '男の子：小さな帽子の雰囲気だけ（無理な人型化はしない）', girl: '女の子：リボンとまつ毛の雰囲気だけ（無理な人型化はしない）' },
+  人型: { none: '指定なし（AIにおまかせ）', boy: '男の子：男の子キャラとして、短い髪と活発な装い', girl: '女の子：女の子キャラとして、長い髪・リボン・ドレス風の装い', idol: 'イケメンアイドル：イケメンアイドルとして、キラキラしたステージ衣装・ヘッドセットマイク・星のアクセサリー・輝く笑顔' },
+  精霊型: { none: '指定なし（AIにおまかせ）', boy: '男の子：男の子の精霊として、短い髪と活発な装い', girl: '女の子：女の子の精霊として、長い髪・リボン・ドレス風の装い', idol: 'イケメンアイドル：イケメンアイドルの精霊として、キラキラしたステージ衣装・ヘッドセットマイク・星のアクセサリー・輝く笑顔' },
+  獣型: { none: '指定なし（AIにおまかせ）', boy: '男の子：小さな帽子の雰囲気だけ（無理な人型化はしない）', girl: '女の子：リボンとまつ毛の雰囲気だけ（無理な人型化はしない）', idol: 'イケメンアイドル：小さなヘッドセットマイクと星型チャームの雰囲気だけ（無理な人型化はしない）' },
+  道具型: { none: '指定なし（AIにおまかせ）', boy: '男の子：小さな帽子の雰囲気だけ（無理な人型化はしない）', girl: '女の子：リボンとまつ毛の雰囲気だけ（無理な人型化はしない）', idol: 'イケメンアイドル：小さなヘッドセットマイクと星型チャームの雰囲気だけ（無理な人型化はしない）' },
+  群体型: { none: '指定なし（AIにおまかせ）', boy: '男の子：小さな帽子の雰囲気だけ（無理な人型化はしない）', girl: '女の子：リボンとまつ毛の雰囲気だけ（無理な人型化はしない）', idol: 'イケメンアイドル：小さなヘッドセットマイクと星型チャームの雰囲気だけ（無理な人型化はしない）' },
 };
 
 export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: Tone = 'normal', appearance: Appearance = 'none'): PromptParts {
@@ -278,6 +284,7 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
     ? FORM_EN[spec.form]
     : (APPEARANCE_FORM_EN[spec.form]?.[appearance] ?? FORM_EN[spec.form]);
   const lines = [
+    'Square image, 1:1 aspect ratio. The character and the sparkling background fill the entire square canvas from edge to edge.',
     `A chibi character sticker illustration in the style of 1980s Japanese sparkling prize stickers. Super-deformed, about 2.5 heads tall, bold outlines, vivid colors, ${SPARKLE_EN[tier]}.`,
     `The character is ${formPhrase}, ${BODY_EN[chart.dayGan]}, with ${expr}.`,
     ...(appearance === 'none' ? [] : [APPEARANCE_EXTRA_EN[spec.form][appearance]]),
@@ -290,6 +297,7 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
     'No text, no letters, no words, no frame, no border, no logo.',
   ];
   const partsJa = [
+    { label: '画角', value: '正方形（1:1）。キャラと背景が正方形の全面に広がる' },
     { label: '背景の派手さ（レア度）', value: SPARKLE_JA[tier] },
     { label: 'トーン', value: TONE_MOOD_JA[tone] },
     { label: '見た目', value: APPEARANCE_JA[spec.form][appearance] },
