@@ -10,6 +10,7 @@
 //   --appearance none|boy|girl   見た目（省略時は none＝指定なし。idol は boy に読み替える）
 // トーンは利用者が選ぶものではなく、最強の通変からの自動ルール（defaultToneOf）で決まる（v0.2.3〜）。
 // 年齢区分（子ども／若者／青年／中年／円熟）・体格（最強の五行）・髪（日干の五行）も命式と年齢から自動で決まる（v0.2.5〜）。
+// 顔の装飾は職業から自動で決まる（v0.2.6〜。頭にサブ装備が乗る命式では小さく弱める）。
 declare const process: { argv: string[]; exit: (code?: number) => never };
 
 import {
@@ -99,7 +100,7 @@ function main(): void {
     ? APPEARANCE_LABEL[appearance]
     : `${APPEARANCE_LABEL[appearance]}（年齢区分：${AGE_BAND_LABEL[ageBand]}）`;
   console.log(`職業：${TONE_LABEL[tone]}（最強の星・${chart.strongest}から自動決定：${toneReasonOf(chart.strongest)}）／見た目：${appearanceNote}／レア度：星${rarity.stars}（${GLAMOUR_LABEL[glamourTierOf(rarity.stars)]}）`);
-  console.log(`外見の理由：年齢感 ${appearanceReasons.ageLine}／体格 ${appearanceReasons.buildLine}／${hairLabelOf(spec.form)} ${appearanceReasons.hairLine}`);
+  console.log(`外見の理由：年齢感 ${appearanceReasons.ageLine}／体格 ${appearanceReasons.buildLine}／${hairLabelOf(spec.form)} ${appearanceReasons.hairLine}／顔の装飾 ${appearanceReasons.ornamentLine}`);
   console.log('');
   console.log('===== 呪文（英語プロンプト） =====');
   console.log(prompt.prompt);

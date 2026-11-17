@@ -174,7 +174,7 @@ export function fortuneBodyOf(chart: Chart, f: YearFortune): string[] {
 export interface ExplainedTexts {
   personality: string[];
   jobLine: string; // 職業（職業名＋短い理由）。v0.2.4 で追加（オーナー確定）
-  appearanceLines: string[]; // 見た目（年齢感・体格・髪＋それぞれの根拠）。v0.2.5 で追加（オーナー指示）
+  appearanceLines: string[]; // 見た目（年齢感・体格・髪・顔の装飾＋それぞれの根拠）。v0.2.5 で追加、装飾は v0.2.6
   fortuneHeading: string;
   fortuneBody: string[];
   equipLines: string[];
@@ -194,6 +194,7 @@ export function explainedInfoOf(chart: Chart, year: number, ageBand: AgeBand = '
       `年齢感：${reasons.ageLine}`,
       `体格：${reasons.buildLine}`,
       `${hairLabelOf(spec.form)}：${reasons.hairLine}`,
+      `顔の装飾：${reasons.ornamentLine}`,
     ],
     fortuneHeading: `${f.year}年の運勢（${f.stage}）`,
     fortuneBody: fortuneBodyOf(chart, f),
@@ -347,65 +348,126 @@ const SPARKLE_JA: Record<GlamourTier, string> = {
   jackpot: '大当たり（星5相当）：豪華な虹色プリズム背景に強い光と宝石のきらめき',
 };
 
-// 職業ごとの情報（理由文・呪文の雰囲気／装い文 EN/JA）。名称は fortune.ts の TONE_LABEL。
+// 職業ごとの情報（理由文・呪文の雰囲気／装い文 EN/JA・顔の装飾）。名称は fortune.ts の TONE_LABEL。
 // 雰囲気文には職業らしい装いを反映するが、装備ルール（何を持つか・大きさ・持ち方）が
 // 最優先で、装いはそれと矛盾しない範囲の雰囲気づけに留める。
 // SDの可愛さは維持し、ホラーにはしない（オーナー決定 2026-11-15）
+// 顔の装飾（v0.2.6、オーナー確定）：職業ごとに1つ割り当てる。頭にサブ装備が乗る命式では
+// 装備の置き場所を優先し、装飾は小さい版（ornamentSmall）に弱める。覆うのは顔の半分程度
+// までを上限とし、表現は「顔の半分程度は見える」側で書く（フルフェイスは使わない）。
+// 顔まわりの装い（羽根帽子・とんがり帽子・フード等）は雰囲気文と重複させず、装飾に一本化する。
+/** 装飾が顔をどの程度覆うか。mouth=口元まで（目元と額は見える）／veil=透けるベール（表情が読める）／none=覆わない */
+export type FaceCover = 'none' | 'mouth' | 'veil';
 export interface ToneInfo {
   reason: string; // その職業になる理由（最強の星の性質）
   moodEn: string; // 呪文に入れる雰囲気／装い文（英語）
   moodJa: string; // 部品の日本語併記
+  ornamentEn: string; // 顔・頭の装飾の文（英語）
+  ornamentJa: string; // 装飾の日本語併記
+  ornamentSmallEn: string; // 頭にサブ装備があるときの、弱めた装飾の文（英語）
+  ornamentSmallJa: string; // 弱めた装飾の日本語併記
+  faceCover: FaceCover; // 顔立ち文との調整が要る覆い方
 }
 export const TONE_INFO: Record<Tone, ToneInfo> = {
   knight: {
     reason: '名誉と秩序を重んじる星',
     moodEn: 'The mood is bright and gallant, like a noble little knight: an upright, dignified bearing, a sincere shining smile, a small cape and light armor-like trims, and clean, noble colors.',
     moodJa: '騎士：明るく凛々しい雰囲気、小さなマントと軽い鎧風の装い、誠実な笑顔',
+    ornamentEn: 'A golden circlet rests on the forehead, and a small open-faced helmet with its visor raised sits lightly on the head, so the face stays fully visible.',
+    ornamentJa: '額のサーカレットと、バイザーを上げた小さな兜（顔は見える）',
+    ornamentSmallEn: 'A tiny golden circlet charm is pinned at the side of the forehead.',
+    ornamentSmallJa: '額の横に小さなサーカレットの飾り',
+    faceCover: 'none',
   },
   priest: {
     reason: '慈しみと守り、学びの星',
     moodEn: 'The mood is calm and merciful, like a gentle little priest: a serene kind smile, white robe-like garments with soft gold trims, warm healing light, and a quiet, scholarly air.',
     moodJa: '僧侶：穏やかで慈しみ深い雰囲気、白い法衣風の装いと温かい光、静かな微笑み',
+    ornamentEn: 'A soft sheer white veil drapes over the head and floats in front of the face; the face and its gentle expression show softly through the translucent cloth.',
+    ornamentJa: '顔の前にふわりとかかる薄いベール（透けて表情が読める）',
+    ornamentSmallEn: 'A small sheer veil ribbon is tied at the side of the head.',
+    ornamentSmallJa: '頭の横に小さなベールのリボン',
+    faceCover: 'veil',
   },
   merchant: {
     reason: '誠実に財を守り育てる星',
     moodEn: 'The mood is warm and dependable, like an honest little merchant: a friendly trustworthy smile, neat tidy clothes with a small apron-like trim, steady earthy colors, and a careful, nurturing air.',
     moodJa: '商人：温かく頼れる雰囲気、きちんとした身なりと小さな前掛け風の装い、誠実な笑顔',
+    ornamentEn: 'A neatly wrapped turban-style cloth in warm earthy tones is worn on the head.',
+    ornamentJa: 'ターバン風の巻き布',
+    ornamentSmallEn: 'A small wrapped cloth band circles the head.',
+    ornamentSmallJa: '小さな巻き布の帯',
+    faceCover: 'none',
   },
   bard: {
     reason: '生み出して楽しませる星',
-    moodEn: 'The mood is joyful and musical, like a cheerful little bard poet: a bright singing smile, a light traveling outfit with a small feathered cap, cozy warm colors, and a generous air that shares fun with everyone.',
-    moodJa: '吟遊詩人：明るく楽しい雰囲気、羽根つきの小さな帽子と旅装束、歌うような笑顔',
+    moodEn: 'The mood is joyful and musical, like a cheerful little bard poet: a bright singing smile, a light traveling outfit, cozy warm colors, and a generous air that shares fun with everyone.',
+    moodJa: '吟遊詩人：明るく楽しい雰囲気、軽い旅装束、歌うような笑顔',
+    ornamentEn: 'A small feathered cap is worn jauntily on the head.',
+    ornamentJa: '羽根つきの小さな帽子',
+    ornamentSmallEn: 'A tiny feather pin is stuck at the side of the head.',
+    ornamentSmallJa: '頭の横に小さな羽根の飾り',
+    faceCover: 'none',
   },
   fighter: {
     reason: '武器に頼らず自分の体で立つ、自立の星',
     moodEn: 'The mood is bold and disciplined, like a little martial artist who relies on their own body: a confident determined grin, a simple training outfit with wrapped fists, deep blue-grey accents, and a self-reliant air. Cute and charming, never horror.',
     moodJa: '武闘家：凛々しく自立した雰囲気、道着風の装いと拳の包帯、青灰の差し色（可愛さは維持、ホラーにはしない）',
+    ornamentEn: 'A headband is tied firmly around the forehead.',
+    ornamentJa: '鉢巻',
+    ornamentSmallEn: 'A thin headband cord is tied at the side of the forehead.',
+    ornamentSmallJa: '細い鉢巻の紐を横で結ぶ',
+    faceCover: 'none',
   },
   gladiator: {
     reason: '熱い勝負の星',
     moodEn: 'The mood is hot and fearless, like a passionate little gladiator: an excited competitive grin, a light arena outfit with a bold sash, ember-red accents, and a restless, energetic air. Cute and charming, never horror.',
     moodJa: '闘士：熱く大胆な雰囲気、軽い闘技装束と大胆な帯、炎のような差し色（可愛さは維持、ホラーにはしない）',
+    ornamentEn: 'A sturdy forehead-guard headgear is strapped around the head, leaving the face open.',
+    ornamentJa: '額当てのヘッドギア（顔は開いている）',
+    ornamentSmallEn: 'A small forehead guard plate is worn at the front of the head.',
+    ornamentSmallJa: '小さな額当て',
+    faceCover: 'none',
   },
   mage: {
     reason: '型破りの才能と言葉の力',
-    moodEn: 'The mood is brilliant and unconventional, like a little mage of words and wonders: a cheeky fearless grin, a pointed hat and flowing robe-like outfit, vivid indigo accents, and a free, untamed air. Cute and charming, never horror.',
-    moodJa: '魔法使い：型破りで自由な雰囲気、とんがり帽子とローブ風の装い、藍の差し色（可愛さは維持、ホラーにはしない）',
+    moodEn: 'The mood is brilliant and unconventional, like a little mage of words and wonders: a cheeky fearless grin, a flowing robe-like outfit, vivid indigo accents, and a free, untamed air. Cute and charming, never horror.',
+    moodJa: '魔法使い：型破りで自由な雰囲気、ローブ風の装い、藍の差し色（可愛さは維持、ホラーにはしない）',
+    ornamentEn: 'A tall pointed hat is worn on the head.',
+    ornamentJa: 'とんがり帽子',
+    ornamentSmallEn: 'A tiny pointed hat is perched at the side of the head.',
+    ornamentSmallJa: '頭の横に小さなとんがり帽子',
+    faceCover: 'none',
   },
   rogue: {
     reason: '流れを読んで財を動かす星',
-    moodEn: 'The mood is playful and quick-witted, like a cheerful little rogue who reads the flow of fortune: a sly fun-loving grin, a light nimble outfit with a small hood and pouch, deep emerald accents, and an ever-changing air. Cute and charming, never horror.',
-    moodJa: '盗賊：遊び心のある雰囲気、小さなフードと小袋の軽い装い、深いエメラルドの差し色（可愛さは維持、ホラーにはしない）',
+    moodEn: 'The mood is playful and quick-witted, like a cheerful little rogue who reads the flow of fortune: a sly fun-loving grin, a light nimble outfit with a small pouch, deep emerald accents, and an ever-changing air. Cute and charming, never horror.',
+    moodJa: '盗賊：遊び心のある雰囲気、小袋の軽い装い、深いエメラルドの差し色（可愛さは維持、ホラーにはしない）',
+    ornamentEn: 'A cloth mask covers the nose and mouth, while the eyes and forehead stay visible and expressive, and a small hood rests on the head.',
+    ornamentJa: '口元を覆うマスクと小さなフード（目元と額は見えて表情が読める）',
+    ornamentSmallEn: 'A cloth mask covers the nose and mouth, while the eyes and forehead stay visible and expressive.',
+    ornamentSmallJa: '口元を覆うマスク（目元と額は見える。頭の装備を優先してフードはなし）',
+    faceCover: 'mouth',
   },
   darkknight: {
     reason: '闘争の星',
     moodEn: 'The mood is dark and commanding, like a little dark knight: a bold confident glare softened by cuteness, dark armor-like trims and a deep crimson cape, and an air of playful dominance. Cute and adorable, never horror.',
     moodJa: '暗黒騎士：闇と闘争の雰囲気、黒い鎧風の装いと深紅のマント（可愛さは維持、ホラーにはしない）',
+    ornamentEn: 'A black half mask covers the nose and mouth, while the eyes and forehead stay fully visible, the eyes gleaming with playful confidence above the mask.',
+    ornamentJa: '口元を覆う黒いハーフマスク（目元と額は見えて表情が読める）',
+    ornamentSmallEn: 'A small black half mask covers only the mouth, so the eyes, nose and forehead stay visible.',
+    ornamentSmallJa: '口元だけを覆う小さな黒いハーフマスク（目元と鼻・額は見える）',
+    faceCover: 'mouth',
   },
   seer: {
     reason: 'ひらめきと神秘の星',
-    moodEn: 'The mood is mysterious and dreamy, like a little fortune teller: a quiet unreadable smile, a soft hood and flowing cloth, deep purple accents, faint moonlit sparkles, and an enchanting, solitary air. Cute and adorable, never horror.',
-    moodJa: '占い師：神秘的な雰囲気、柔らかなフードと揺れる布、紫の差し色と月明かりのきらめき（可愛さは維持、ホラーにはしない）',
+    moodEn: 'The mood is mysterious and dreamy, like a little fortune teller: a quiet unreadable smile, flowing cloth, deep purple accents, faint moonlit sparkles, and an enchanting, solitary air. Cute and adorable, never horror.',
+    moodJa: '占い師：神秘的な雰囲気、揺れる布、紫の差し色と月明かりのきらめき（可愛さは維持、ホラーにはしない）',
+    ornamentEn: 'A sheer veil and a soft hood drape over the head and float in front of the face; the face and its quiet expression show softly through the translucent cloth.',
+    ornamentJa: '顔を覆う透けるベールとフード（透けて表情が読める）',
+    ornamentSmallEn: 'A small sheer veil ribbon hangs at the side of the head.',
+    ornamentSmallJa: '頭の横に小さな透けるベールのリボン（頭の装備を優先してフードはなし）',
+    faceCover: 'veil',
   },
 };
 
@@ -541,6 +603,57 @@ function appearanceExtraEn(form: FormType, band: AgeBand, appearance: Appearance
   if (form === '人型' || form === '精霊型') return AGE_EXTRA_HUMAN_EN[band][appearance];
   if (form === '群体型') return AGE_EXTRA_MULTI_EN[band][appearance];
   return AGE_EXTRA_SINGLE_EN[band][appearance];
+}
+
+// ---------- 顔の装飾（v0.2.6、オーナー確定） ----------
+// 職業ごとに顔・頭の装飾を1つ割り当て、呪文に1文として入れる。利用者は選べない。
+// 頭にサブ装備が乗る命式（サブ装備2つ目＝頭の位置）では、装備の置き場所を優先し、
+// 装飾は小さい版に弱める（装備ルールが最優先という既存の原則どおり）。
+// 覆うのは顔の半分程度までを上限とし、表現は「半分程度は見える」側で書く。
+// 口元を覆うマスクの職業（盗賊・暗黒騎士）では、人型・精霊型の顔立ち文を
+// 目元中心の文に差し替え、隠れる口元（唇・笑顔）の描写と矛盾しないようにする。
+// 透けるベール（僧侶・占い師）は表情が透けて読めるため、顔立ち文はそのまま使う。
+
+/** 口元がマスクで隠れる場合の顔立ち文（人型・精霊型）。目元と額が見える前提で、唇・笑顔には触れない */
+const AGE_EXTRA_MASKED_EN: Record<AgeBand, Record<AppearanceKey, string>> = {
+  child: {
+    boy: 'Above the mask, his eyes and forehead stay fully visible: big round eyes with clearly drawn irises and highlights, strong little eyebrows, and a bright, expressive gaze.',
+    girl: 'Above the mask, her eyes and forehead stay fully visible: big round eyes with clearly drawn irises, highlights and long eyelashes, and a bright, expressive gaze. She wears a ribbon hair accessory.',
+  },
+  youth: {
+    boy: 'Above the mask, his eyes and forehead stay fully visible: large detailed eyes with clearly drawn irises and highlights, strong tidy eyebrows, and a fresh, confident gaze.',
+    girl: 'Above the mask, her eyes and forehead stay fully visible: large detailed eyes with clearly drawn irises, highlights and long eyelashes, and a bright, charming gaze. She wears a ribbon hair accessory.',
+  },
+  adult: {
+    boy: 'Above the mask, his eyes and forehead stay fully visible: deep detailed eyes with clearly drawn irises and highlights, strong tidy eyebrows, and a calm, confident gaze.',
+    girl: 'Above the mask, her eyes and forehead stay fully visible: deep detailed eyes with clearly drawn irises, highlights and long eyelashes, and a calm, graceful gaze. She wears a ribbon hair accessory.',
+  },
+  middle: {
+    boy: 'Above the mask, his eyes and forehead stay fully visible: steady detailed eyes with clearly drawn irises and highlights, strong tidy eyebrows, and a composed, reassuring gaze. Keep him vibrant and handsome, never aged or weary.',
+    girl: 'Above the mask, her eyes and forehead stay fully visible: steady detailed eyes with clearly drawn irises, highlights and long eyelashes, and a composed, warm gaze. She wears a ribbon hair accessory. Keep her vibrant and beautiful, never aged or weary.',
+  },
+  mature: {
+    boy: 'Above the mask, his eyes and forehead stay fully visible: calm detailed eyes with clearly drawn irises and highlights, and a gentle, composed gaze full of warm gravitas. Keep him vibrant and full of life.',
+    girl: 'Above the mask, her eyes and forehead stay fully visible: calm detailed eyes with clearly drawn irises, highlights and long eyelashes, and a gentle, composed gaze full of warm gravitas. She wears a ribbon hair accessory. Keep her vibrant and full of life.',
+  },
+};
+
+export interface OrnamentText {
+  en: string; // 呪文に入れる装飾の文
+  ja: string; // 部品併記・理由文に使う日本語
+  weakened: boolean; // 頭のサブ装備を優先して小さい版にしたか
+}
+
+/**
+ * その命式で使う顔の装飾（職業から一意に決まる）。
+ * 頭にサブ装備が乗る命式（サブ装備2つ目がある）では小さい版に弱める。
+ */
+export function ornamentTextOf(tone: Tone, spec: CharacterSpec): OrnamentText {
+  const info = TONE_INFO[tone];
+  const weakened = spec.subEq.length >= 2;
+  return weakened
+    ? { en: info.ornamentSmallEn, ja: info.ornamentSmallJa, weakened }
+    : { en: info.ornamentEn, ja: info.ornamentJa, weakened };
 }
 
 /** 年齢区分ごとの比率（人型・精霊型で男女指定のときだけ使う。他形態・指定なしは約2.5頭身のまま） */
@@ -705,20 +818,24 @@ export interface AppearanceReasons {
   ageLine: string; // 年齢感と根拠
   buildLine: string; // 体格と根拠
   hairLine: string; // 髪（毛並み・差し色）と根拠
+  ornamentLine: string; // 顔の装飾と根拠（職業から。v0.2.6）
 }
 
 /**
- * 外見が「なぜそうなったか」の理由文（年齢区分・体格・髪）。
+ * 外見が「なぜそうなったか」の理由文（年齢区分・体格・髪・顔の装飾）。
  * 詳細画面の「分身キャラの設計」と解説つきシールで共用し、表示箇所でずれないようにする。
  */
 export function appearanceReasonLines(chart: Chart, spec: CharacterSpec, band: AgeBand): AppearanceReasons {
   const build = buildTextOf(chart.strongestElement, spec.form);
   const dayEl = GAN_ELEMENT[chart.dayGan];
   const hair = hairTextOf(dayEl, spec.form, band);
+  const tone = toneOfChart(chart);
+  const ornament = ornamentTextOf(tone, spec);
   return {
     ageLine: `${AGE_BAND_LABEL[band]} ― 年齢の区分（${AGE_BAND_RANGE[band]}）から`,
     buildLine: `${build.ja} ― いちばん強い五行『${chart.strongestElement}』の性質から`,
     hairLine: `${hair.ja} ― 日干『${chart.dayGan}』（${dayEl}）の性質から`,
+    ornamentLine: `${ornament.ja} ― 職業『${TONE_LABEL[tone]}』から${ornament.weakened ? '（頭のサブ装備を優先して小さく）' : ''}`,
   };
 }
 
@@ -747,14 +864,22 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
   const build = buildTextOf(chart.strongestElement, spec.form);
   const dayEl = GAN_ELEMENT[chart.dayGan];
   const hair = hairTextOf(dayEl, spec.form, ageBand);
+  // 顔の装飾は職業から常に入れる（v0.2.6）。頭にサブ装備が乗る命式では小さい版に弱める
+  const ornament = ornamentTextOf(tone, spec);
+  // 口元を覆うマスクの職業では、人型・精霊型の顔立ち文を目元中心の文に差し替える
+  const faceExtra = appearance === 'none' ? null
+    : TONE_INFO[tone].faceCover === 'mouth' && human
+      ? AGE_EXTRA_MASKED_EN[ageBand][appearance]
+      : appearanceExtraEn(spec.form, ageBand, appearance);
   const lines = [
     'Square image, 1:1 aspect ratio. The character and the sparkling background fill the entire square canvas from edge to edge.',
     `A chibi character sticker illustration in the style of 1980s Japanese sparkling prize stickers. Super-deformed, ${proportions}, bold outlines, vivid colors, ${SPARKLE_EN[tier]}.`,
     `The character is ${formPhrase}, ${BODY_EN[chart.dayGan]}, with ${expr}.`,
     build.en,
     hair.en,
-    ...(appearance === 'none' ? [] : [appearanceExtraEn(spec.form, ageBand, appearance)]),
+    ...(faceExtra ? [faceExtra] : []),
     ...(TONE_INFO[tone].moodEn ? [TONE_INFO[tone].moodEn] : []),
+    ornament.en,
     `It carries ${sizePhrase(spec.mainEq.sizeTier, main.en, true)}.`,
     ...(subs.length ? [`Also: ${subs.join(', and ')}.`] : []),
     `A small ${ELEMENT_COLOR_EN[spec.charmElement]} ribbon charm is tied at the neck.`,
@@ -766,6 +891,7 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
     { label: '画角', value: '正方形（1:1）。キャラと背景が正方形の全面に広がる' },
     { label: '背景の派手さ（レア度）', value: SPARKLE_JA[tier] },
     { label: '職業', value: TONE_INFO[tone].moodJa },
+    { label: '顔の装飾（職業）', value: `${ornament.ja}（職業・${TONE_LABEL[tone]}から${ornament.weakened ? '。頭のサブ装備を優先して小さく' : ''}）` },
     { label: '見た目', value: appearanceJaOf(spec.form, appearance, ageBand) },
     { label: '体格（最強の五行）', value: `${build.ja}（最強の五行・${chart.strongestElement}）` },
     { label: hairLabelOf(spec.form), value: `${hair.ja}（日干・${chart.dayGan}＝${dayEl}）` },

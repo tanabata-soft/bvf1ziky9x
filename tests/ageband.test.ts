@@ -274,9 +274,9 @@ describe('外見の理由の説明（設計欄と解説つきシールで共用�
     expect(r.hairLine).toContain('金');
   });
 
-  it('explainedInfoOf の「見た目」節に年齢感・体格・髪と根拠が入る', () => {
+  it('explainedInfoOf の「見た目」節に年齢感・体格・髪・顔の装飾と根拠が入る', () => {
     const info = explainedInfoOf(chart, 2026, band);
-    expect(info.appearanceLines).toHaveLength(3);
+    expect(info.appearanceLines).toHaveLength(4);
     const joined = info.appearanceLines.join('\n');
     expect(joined).toContain('年齢感');
     expect(joined).toContain('若者');
@@ -286,6 +286,8 @@ describe('外見の理由の説明（設計欄と解説つきシールで共用�
     expect(joined).toContain('髪');
     expect(joined).toContain('銀に近い');
     expect(joined).toContain('『辛』');
+    expect(joined).toContain('顔の装飾');
+    expect(joined).toContain('職業『騎士』から');
     // 既存の節はそのまま
     expect(info.personality.length).toBeGreaterThanOrEqual(2);
     expect(info.jobLine).toContain('騎士');
