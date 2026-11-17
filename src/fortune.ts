@@ -236,12 +236,12 @@ export function decideCharacter(chart: Chart): CharacterSpec {
 
 // ---------- レア度（仮ルール: チェックリスト方式） ----------
 
-const SANGOU: Zhi[][] = [
+export const SANGOU: Zhi[][] = [
   ['申', '子', '辰'], ['寅', '午', '戌'], ['巳', '酉', '丑'], ['亥', '卯', '未'],
 ];
-const GOU_PAIRS: [Zhi, Zhi][] = [['子', '午'], ['丑', '未'], ['寅', '申'], ['卯', '酉'], ['辰', '戌'], ['巳', '亥']];
-const ROKUGOU: [Zhi, Zhi][] = [['子', '丑'], ['寅', '亥'], ['卯', '戌'], ['辰', '酉'], ['巳', '申'], ['午', '未']];
-const KEI_PAIRS: [Zhi, Zhi][] = [['子', '卯'], ['丑', '戌'], ['戌', '未'], ['丑', '未'], ['寅', '巳'], ['巳', '申'], ['寅', '申']];
+export const GOU_PAIRS: [Zhi, Zhi][] = [['子', '午'], ['丑', '未'], ['寅', '申'], ['卯', '酉'], ['辰', '戌'], ['巳', '亥']];
+export const ROKUGOU: [Zhi, Zhi][] = [['子', '丑'], ['寅', '亥'], ['卯', '戌'], ['辰', '酉'], ['巳', '申'], ['午', '未']];
+export const KEI_PAIRS: [Zhi, Zhi][] = [['子', '卯'], ['丑', '戌'], ['戌', '未'], ['丑', '未'], ['寅', '巳'], ['巳', '申'], ['寅', '申']];
 const GAN_GOU: [Gan, Gan][] = [['甲', '己'], ['乙', '庚'], ['丙', '辛'], ['丁', '壬'], ['戊', '癸']];
 
 export interface Rarity {
@@ -285,10 +285,21 @@ export function defaultToneOf(strongest: ShiShen): Tone {
 // 占いの入力（本人の性別）ではなく、作るキャラの見た目の指定。呪文だけに効き、
 // 称号とシール合成は変えない。既定は「指定なし」（AIにおまかせ）。
 
-export type Appearance = 'none' | 'boy' | 'girl' | 'idol';
+export type Appearance = 'none' | 'boy' | 'girl';
 export const APPEARANCE_LABEL: Record<Appearance, string> = {
-  none: '指定なし', boy: '男の子', girl: '女の子', idol: 'イケメンアイドル',
+  none: '指定なし', boy: '男の子', girl: '女の子',
 };
+
+/**
+ * 保存データの見た目を現行の値に読み替える。
+ * v0.1.8 で存在した 'idol'（イケメンアイドル）は v0.1.9 で男の子に統合されたため 'boy' として扱う。
+ * それ以外の未知の値は「指定なし」に倒す。
+ */
+export function normalizeAppearance(value: unknown): Appearance {
+  if (value === 'idol') return 'boy';
+  if (value === 'boy' || value === 'girl' || value === 'none') return value;
+  return 'none';
+}
 
 export function rarityOf(chart: Chart): Rarity {
   const reasons: string[] = [];

@@ -1,5 +1,5 @@
 // コレクションの保存（localStorage、端末内のみ）
-import type { Appearance, Tone } from './fortune';
+import { normalizeAppearance, type Appearance, type Tone } from './fortune';
 
 export type EntryStatus = 'waiting' | 'done' | 'sent';
 
@@ -26,10 +26,17 @@ export function loadEntries(): Entry[] {
     const raw = localStorage.getItem(KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw) as Entry[];
-    return Array.isArray(arr) ? arr : [];
+    if (!Array.isArray(arr)) return [];
+    // 読み込み時に見た目を現行の値へ読み替える（v0.1.8 の 'idol' は男の子扱い。保存データは壊さない）
+    return arr.map((e) => ({ ...e, appearance: normalizeAppearance(e.appearance) }));
   } catch {
     return [];
   }
+}
+
+/** 完成シール（登録済み画像）があるか。一覧の「解説つきで見る」ボタンの表示条件 */
+export function hasSealImage(e: Entry): boolean {
+  return typeof e.image === 'string' && e.image.length > 0;
 }
 
 export function saveEntries(entries: Entry[]): void {

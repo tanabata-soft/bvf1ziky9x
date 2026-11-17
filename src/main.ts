@@ -5,8 +5,9 @@ import {
   type Appearance, type BirthInput, type Chart, type Tone,
 } from './fortune';
 import {
-  DAY_GAN_TEXT, DAY_GAN_SHORT, STRONGEST_TEXT, YEAR_STAR_TEXT, STAGE_TEXT,
+  DAY_GAN_TEXT, STRONGEST_TEXT,
   EQUIPMENT, prefixTitleOf, POSTFIX_TITLE, ELEMENT_COLOR, buildPrompt, seasonOf, SEASON_JA,
+  fortuneBodyOf, explainedInfoOf,
 } from './texts';
 import { silhouetteSvg } from './silhouette';
 import { buildDisplayName } from './name';
@@ -16,11 +17,11 @@ import {
   coverScale, type CropViewState,
 } from './crop';
 import {
-  loadEntries, addEntry, updateEntry, getEntry,
+  loadEntries, addEntry, updateEntry, getEntry, hasSealImage,
   type Entry,
 } from './store';
 
-const APP_VERSION = '0.1.8';
+const APP_VERSION = '0.1.9';
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 interface Person {
@@ -134,7 +135,7 @@ function renderInput() {
       <fieldset>
         <legend>キャラの見た目</legend>
         <p class="small">占う相手の性別ではなく、作る分身キャラの見た目の指定です。呪文（プロンプト）にだけ効きます。</p>
-        ${(['none', 'boy', 'girl', 'idol'] as Appearance[]).map((a) => `<label class="check"><input type="radio" name="appearance" value="${a}" ${a === 'none' ? 'checked' : ''}> ${APPEARANCE_LABEL[a]}</label>`).join('')}
+        ${(['none', 'boy', 'girl'] as Appearance[]).map((a) => `<label class="check"><input type="radio" name="appearance" value="${a}" ${a === 'none' ? 'checked' : ''}> ${APPEARANCE_LABEL[a]}</label>`).join('')}
       </fieldset>
       <fieldset>
         <legend>この結果の扱い</legend>
@@ -232,8 +233,7 @@ function renderReading(person: Person, opts: ReadingOpts): string {
   const fortuneCards = years.map((f) => `
     <article class="fortune-card">
       <h3>${f.year}年（${f.gz}）の運勢 <span class="stage stage-${f.stage}">${f.stage}</span></h3>
-      <p>${YEAR_STAR_TEXT[f.shiShen]}</p>
-      <p>${STAGE_TEXT[f.stage]}</p>
+      ${fortuneBodyOf(chart, f).map((p) => `<p>${esc(p)}</p>`).join('')}
       ${f.factors.length ? `<ul>${f.factors.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
       <p class="small">この年の装備：${EQUIPMENT[f.shiShen].name}（${f.shiShen}）</p>
     </article>`).join('');
@@ -255,7 +255,7 @@ function renderReading(person: Person, opts: ReadingOpts): string {
     <label class="check small"><input type="checkbox" id="postfixToggle" ${opts.showPostfix ? 'checked' : ''}> 後ろの称号「・${esc(dn.postfix)}」も付ける（基本は付けません）</label>
     <div class="tone-row"><span class="small">キャラのトーン：</span>${(['normal', 'dark', 'villain'] as Tone[]).map((t) => `<label class="check small"><input type="radio" name="toneSel" value="${t}" ${opts.tone === t ? 'checked' : ''}> ${TONE_LABEL[t]}</label>`).join('')}</div>
     <p class="small">トーンを変えると、称号・呪文・シールの帯の色が変わります。初期値は一番強い星からの提案です。</p>
-    <div class="tone-row"><span class="small">キャラの見た目：</span>${(['none', 'boy', 'girl', 'idol'] as Appearance[]).map((a) => `<label class="check small"><input type="radio" name="appearanceSel" value="${a}" ${opts.appearance === a ? 'checked' : ''}> ${APPEARANCE_LABEL[a]}</label>`).join('')}</div>
+    <div class="tone-row"><span class="small">キャラの見た目：</span>${(['none', 'boy', 'girl'] as Appearance[]).map((a) => `<label class="check small"><input type="radio" name="appearanceSel" value="${a}" ${opts.appearance === a ? 'checked' : ''}> ${APPEARANCE_LABEL[a]}</label>`).join('')}</div>
     <p class="small">見た目は分身キャラの見た目の指定で、呪文にだけ効きます（称号とシールは変わりません）。</p>
     ${opts.image ? '<p class="small">※ 完成済みシールへの反映は、画像を登録し直したときに行われます。</p>' : ''}
     <p class="small">形態：${spec.form} ／ レア度：<span class="stars">${'★'.repeat(rarity.stars)}${'☆'.repeat(5 - rarity.stars)}</span>（シールでは星ではなく「${GLAMOUR_LABEL[tier]}」の枠の派手さで表します）${opts.status ? ` ／ 状態：${opts.status === 'waiting' ? '画像待ち' : opts.status === 'done' ? '完成' : '贈った'}` : ''}</p>
@@ -326,6 +326,17 @@ function renderReading(person: Person, opts: ReadingOpts): string {
   </section>`;
 }
 
+/**
+ * 解説つきシールの生成（詳細画面の書き出しと、シール帳のビューアで共用）。
+ * 文面は texts.ts の explainedInfoOf（単一の生成処理）から作るので、表示箇所でずれない。
+ */
+async function buildExplainedDataUrl(person: Person, sealImage: string): Promise<string> {
+  const chart = computeChart(person.birth);
+  const sealImg = await loadImageFromUrl(sealImage);
+  const canvas = composeExplainedSeal(sealImg, explainedInfoOf(chart, new Date().getFullYear()));
+  return canvasToDataUrl(canvas);
+}
+
 function bindReading(person: Person, opts: ReadingOpts) {
   const chart = computeChart(person.birth);
   const rarity = rarityOf(chart);
@@ -393,22 +404,8 @@ function bindReading(person: Person, opts: ReadingOpts) {
     const btn = ev.currentTarget as HTMLButtonElement;
     const msg = app.querySelector('#registerMsg');
     const ok = await withButtonFeedback(btn, '解説つき画像を作っています…', '書き出しました ✓', async () => {
-      const sealImg = await loadImageFromUrl(opts.image!);
-      const spec = decideCharacter(chart);
-      const f = yearFortune(chart, new Date().getFullYear());
-      const canvas = composeExplainedSeal(sealImg, {
-        personality: [DAY_GAN_SHORT[chart.dayGan], STRONGEST_TEXT[chart.strongest]],
-        fortuneHeading: `${f.year}年の運勢（${f.stage}）`,
-        fortuneBody: [YEAR_STAR_TEXT[f.shiShen], STAGE_TEXT[f.stage]],
-        equipLines: [
-          ...[spec.mainEq, ...spec.subEq].map((p) =>
-            `${EQUIPMENT[p.shiShen].name}（${p.shiShen}）：${EQUIPMENT[p.shiShen].meaning}`),
-          `お守りのリボンチャーム：足りない五行「${spec.charmElement}」を補い、バランスを整えるお守りです`,
-        ],
-        footer: '命式シール（仮）― 四柱推命をもとにした贈り物シールです',
-        mainColor: chart.strongestElement,
-      });
-      await exportSeal(canvasToDataUrl(canvas), `seal-explained-${person.nickname}.jpg`);
+      const dataUrl = await buildExplainedDataUrl(person, opts.image!);
+      await exportSeal(dataUrl, `seal-explained-${person.nickname}.jpg`);
     });
     if (!ok && msg) {
       msg.innerHTML = '<p class="error">解説つき画像を作れませんでした。もう一度お試しください。</p>';
@@ -628,6 +625,7 @@ function renderList() {
         <div class="seal-name"><span class="name-prefix">${esc(dn.prefix)}</span>${esc(e.nickname)}${showPostfix ? `<span class="name-postfix">・${esc(dn.postfix)}</span>` : ''}</div>
         <span class="badge badge-${e.status}">${e.status === 'waiting' ? '画像待ち' : e.status === 'done' ? '完成' : '贈った'}</span>
       </div>
+      ${hasSealImage(e) ? `<button class="explained-btn" data-explained="${e.id}">解説つきで見る</button>` : ''}
     </article>`;
   }).join('');
   app.innerHTML = `${headerHtml()}<main>
@@ -647,6 +645,70 @@ function renderList() {
     route = { name: 'detail', id: (c as HTMLElement).dataset.open! };
     render();
   }));
+  app.querySelectorAll('[data-explained]').forEach((b) => b.addEventListener('click', (ev) => {
+    ev.stopPropagation(); // カード自体のクリック（詳細へ）は発火させない
+    const entry = getEntry((b as HTMLElement).dataset.explained!);
+    if (entry && hasSealImage(entry)) void openExplainedViewer(entry);
+  }));
+}
+
+// ---------- 解説つきシールのビューア（一覧からその場で見る） ----------
+function closeExplainedViewer() {
+  document.querySelector('#sealViewer')?.remove();
+  document.removeEventListener('keydown', onViewerKeydown);
+}
+
+function onViewerKeydown(ev: KeyboardEvent) {
+  if (ev.key === 'Escape') closeExplainedViewer();
+}
+
+/**
+ * 完成済みシールの解説つき版をその場で生成し、全画面オーバーレイで表示する。
+ * 生成は詳細画面の書き出しと共通（buildExplainedDataUrl）。保存形式は変えない。
+ */
+async function openExplainedViewer(entry: Entry) {
+  closeExplainedViewer();
+  const overlay = document.createElement('div');
+  overlay.className = 'seal-viewer';
+  overlay.id = 'sealViewer';
+  overlay.innerHTML = `
+    <div class="seal-viewer-box" role="dialog" aria-label="解説つきシール">
+      <div class="seal-viewer-head">
+        <span class="seal-viewer-title">解説つきシール</span>
+        <button class="seal-viewer-close" aria-label="閉じる">×</button>
+      </div>
+      <div class="seal-viewer-body"><p class="small">解説つきシールを作っています…</p></div>
+      <div class="actions seal-viewer-actions">
+        <button class="primary" id="viewerExport" disabled>共有／ダウンロード</button>
+        <button id="viewerClose">閉じる</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.addEventListener('keydown', onViewerKeydown);
+  overlay.addEventListener('click', (ev) => { if (ev.target === overlay) closeExplainedViewer(); });
+  overlay.querySelector('.seal-viewer-close')?.addEventListener('click', closeExplainedViewer);
+  overlay.querySelector('#viewerClose')?.addEventListener('click', closeExplainedViewer);
+
+  const body = overlay.querySelector<HTMLElement>('.seal-viewer-body')!;
+  const exportBtn = overlay.querySelector<HTMLButtonElement>('#viewerExport')!;
+  const person: Person = {
+    nickname: entry.nickname,
+    birth: { y: entry.y, m: entry.m, d: entry.d, hour: entry.hour, minute: entry.minute },
+  };
+  try {
+    const dataUrl = await buildExplainedDataUrl(person, entry.image!);
+    if (!document.body.contains(overlay)) return; // 生成中に閉じられた
+    body.innerHTML = `<img src="${dataUrl}" alt="解説つきシール">`;
+    exportBtn.disabled = false;
+    exportBtn.addEventListener('click', async () => {
+      await withButtonFeedback(exportBtn, '書き出しています…', '書き出しました ✓', async () => {
+        await exportSeal(dataUrl, `seal-explained-${entry.nickname}.jpg`);
+      });
+    });
+  } catch {
+    if (!document.body.contains(overlay)) return;
+    body.innerHTML = '<p class="error">解説つきシールを作れませんでした。詳細画面からもう一度お試しください。</p>';
+  }
 }
 
 function render() {

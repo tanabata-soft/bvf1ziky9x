@@ -1,7 +1,10 @@
 // 読みの文章（最小セット）と装備辞書、英語プロンプトの部品。
 // 装備辞書は「呪文・シルエット・装備の意味表示」の3出口で共用する（仕様書5.1）。
-import type { Appearance, Element, FormType, FortuneStage, Gan, GlamourTier, ShiShen, Tone, Zhi } from './fortune';
-import { glamourTierOf } from './fortune';
+import type { Appearance, Element, FormType, FortuneStage, Gan, GlamourTier, ShiShen, Tone, YearFortune, Zhi } from './fortune';
+import {
+  glamourTierOf, decideCharacter, yearFortune,
+  GAN_ELEMENT, ZHI_ELEMENT, SANGOU, GOU_PAIRS, ROKUGOU, KEI_PAIRS,
+} from './fortune';
 import type { CharacterSpec, Chart } from './fortune';
 
 export const DAY_GAN_TEXT: Record<Gan, string> = {
@@ -65,6 +68,132 @@ export const STAGE_TEXT: Record<FortuneStage, string> = {
   凶: '少し気を付けたい一年です。無理を重ねず、体調管理と確認を丁寧に。急いで決めないことが守りになります。',
   大凶: '踏ん張りどころの一年です。大きな決断は急がず、守りを固めて過ごしてください。備えと休息が来年への力になります。',
 };
+
+// ---------- 読み文面のバリエーション（v0.1.9） ----------
+// 日干が同じ2人だと性格の書き出しと運勢本文が全く同じ文になってしまう問題への対応。
+// 日干の一行要約に「生まれ月（月支）の季節感」と「日支（相棒の動物）に由来する一節」を組み合わせ、
+// 運勢本文には判定に使っている要素（支の合・冲・刑・三合、不足五行と流年の関係、最強の星）を
+// 反映した、その人の命式に寄せた一文を差し込む。部品はすべてデータ駆動で、文同士は独立に足すだけ
+// （組み合わせで破綻しない形）。
+
+/** 生まれ月の季節感（月支→季節）。性格の書き出しに足す一節 */
+export const SEASON_TRAIT: Record<'spring' | 'summer' | 'autumn' | 'winter', string> = {
+  spring: '春に芽吹く若芽のような伸びやかさがあり、新しいことを始める力が追い風になります。',
+  summer: '夏の陽射しのような勢いがあり、動き出すと周りも巻き込む力があります。',
+  autumn: '秋の実りのような落ち着きがあり、積み重ねを形にしていくのが得意です。',
+  winter: '冬の静けさのような深さがあり、じっくり考える時間から力が湧いてきます。',
+};
+
+/** 日支（相棒の動物）に由来する一節。性格の締めに足す */
+export const DAY_ZHI_TRAIT: Record<Zhi, string> = {
+  子: '相棒のねずみのように機敏で、変化の兆しを素早く察知する勘の良さがあります。',
+  丑: '相棒の牛のように粘り強く、一度決めたことは最後までやり抜く芯の強さがあります。',
+  寅: '相棒の虎のように堂々としていて、ここぞという場面で前に出る勇気があります。',
+  卯: '相棒の兎のように穏やかで、場の空気を和ませる優しさがあります。',
+  辰: '相棒の龍のように夢が大きく、周りを巻き込むスケールの発想があります。',
+  巳: '相棒の蛇のように洞察が鋭く、物事の本質を静かに見抜く力があります。',
+  午: '相棒の馬のように駆け抜ける勢いがあり、行動の速さが持ち味です。',
+  未: '相棒の羊のように温かく、人の気持ちに寄り添う思いやりがあります。',
+  申: '相棒の猿のように器用で機転が利き、遊び心を忘れない人です。',
+  酉: '相棒の鶏のように几帳面で、細部まで気を配る丁寧さがあります。',
+  戌: '相棒の犬のように誠実で、仲間を守る気持ちの強い人です。',
+  亥: '相棒の猪のようにまっすぐ突き進む情熱があり、決めたら迷わない強さがあります。',
+};
+
+/** 性格文（解説つきシール用）: 日干の要約＋季節感／最強の星／日支の一節 */
+export function personalityTextsOf(chart: Chart): string[] {
+  const monthZhi = chart.pillars[1].zhi;
+  return [
+    `${DAY_GAN_SHORT[chart.dayGan]}${SEASON_TRAIT[seasonOf(monthZhi)]}`,
+    STRONGEST_TEXT[chart.strongest],
+    DAY_ZHI_TRAIT[chart.dayZhi],
+  ];
+}
+
+/** 最強の星を「今年の過ごし方の鍵」として添えるときの短いヒント */
+const STRONGEST_YEAR_HINT: Record<ShiShen, string> = {
+  比肩: '自分のペースを守ることが力になります。',
+  劫財: '仲間と刺激し合う場を持つことが力になります。',
+  食神: '作る楽しさを味わう時間が力になります。',
+  傷官: '表現する場を持つことが力になります。',
+  偏財: '人との縁を広げる動きが力になります。',
+  正財: 'コツコツした積み重ねが力になります。',
+  七殺: '勝負どころで踏ん張る覚悟が力になります。',
+  正官: '任された役割を果たすことが力になります。',
+  偏印: '好奇心のままに探る時間が力になります。',
+  正印: '学びと休息で整えることが力になります。',
+};
+
+const pairMatch = (pairs: [Zhi, Zhi][], a: Zhi, b: Zhi): boolean =>
+  pairs.some(([x, y]) => (x === a && y === b) || (y === a && x === b));
+
+/**
+ * 運勢の「その人に寄せた一文」。判定（yearFortune）と同じ要素から組み立てる:
+ * 日支と流年地支の関係（六合／冲／刑／三合の半会）→ 流年の五行と命式の関係（不足を補う／強いものが重なる）
+ * → どちらも無ければ最強の星を鍵にした一文。凶・大凶でも断定せず、過ごし方の助言を添える。
+ */
+export function fortunePersonalLine(chart: Chart, f: YearFortune): string {
+  const dz = chart.dayZhi;
+  const parts: string[] = [];
+  const isChong = pairMatch(GOU_PAIRS, f.zhi, dz);
+  if (pairMatch(ROKUGOU, f.zhi, dz)) {
+    parts.push(`生まれた日の支「${dz}」と今年の支「${f.zhi}」が寄り添う組み合わせで、人との縁が動きやすい年です。新しい出会いや再会を大切にしてください。`);
+  } else if (isChong) {
+    parts.push(`生まれた日の支「${dz}」と今年の支「${f.zhi}」がぶつかる組み合わせで、環境や予定の変化が起きやすい年です。変化は新しい流れの入口でもあります。決めつけず、様子を見ながら進めてください。`);
+  } else if (pairMatch(KEI_PAIRS, f.zhi, dz)) {
+    parts.push(`生まれた日の支「${dz}」と今年の支「${f.zhi}」に少し引っかかりのある組み合わせです。確認を丁寧に進めることが、結果的に近道になります。`);
+  } else {
+    // 三合の半会（例：寅と午）。局の五行は地支自体の五行とは別に決まる
+    const SANGOU_ELEMENT: Element[] = ['水', '火', '金', '木']; // SANGOU の並び（申子辰／寅午戌／巳酉丑／亥卯未）に対応
+    const ti = SANGOU.findIndex((t) => t.includes(f.zhi) && t.includes(dz) && f.zhi !== dz);
+    if (ti >= 0) {
+      parts.push(`生まれた日の支「${dz}」と今年の支「${f.zhi}」で「${SANGOU_ELEMENT[ti]}」の気が集まる組み合わせです。同じ方向を向く仲間と力を合わせると進みやすい年です。`);
+    }
+  }
+  const yearEls: Element[] = [GAN_ELEMENT[f.gan], ZHI_ELEMENT[f.zhi]];
+  if (yearEls.includes(chart.weakestElement)) {
+    parts.push(`今年は、あなたに足りない「${chart.weakestElement}」の気を補ってくれる年です。いつもと違う選択を取り入れることが、バランスを整える助けになります。`);
+  } else if (yearEls.includes(chart.strongestElement)) {
+    parts.push(`今年は、もともと強い「${chart.strongestElement}」の気がさらに重なる年です。得意なことに偏りすぎず、休む時間も予定に入れてください。`);
+  }
+  if (parts.length) return parts.join('');
+  if (f.shiShen === chart.strongest) {
+    return `今年は、あなたの中で一番強い「${chart.strongest}」と同じ星が巡る年です。持ち味がそのまま表に出やすいので、自信を持って進める一方、周りへの配慮も忘れずに。`;
+  }
+  return `今年の過ごし方の鍵は、あなたの中で一番強い「${chart.strongest}」の星です。${STRONGEST_YEAR_HINT[chart.strongest]}`;
+}
+
+/** 運勢本文（詳細画面の読み表示と解説つきシールで共用）: 流年の星の文＋その人に寄せた一文＋段階の総評 */
+export function fortuneBodyOf(chart: Chart, f: YearFortune): string[] {
+  return [YEAR_STAR_TEXT[f.shiShen], fortunePersonalLine(chart, f), STAGE_TEXT[f.stage]];
+}
+
+/** 解説つきシールに載せる情報一式（詳細画面の書き出しと一覧ビューアで共用する単一の生成処理） */
+export interface ExplainedTexts {
+  personality: string[];
+  fortuneHeading: string;
+  fortuneBody: string[];
+  equipLines: string[];
+  footer: string;
+  mainColor: Element;
+}
+
+export function explainedInfoOf(chart: Chart, year: number): ExplainedTexts {
+  const spec = decideCharacter(chart);
+  const f = yearFortune(chart, year);
+  return {
+    personality: personalityTextsOf(chart),
+    fortuneHeading: `${f.year}年の運勢（${f.stage}）`,
+    fortuneBody: fortuneBodyOf(chart, f),
+    equipLines: [
+      ...[spec.mainEq, ...spec.subEq].map((p) =>
+        `${EQUIPMENT[p.shiShen].name}（${p.shiShen}）：${EQUIPMENT[p.shiShen].meaning}`),
+      `お守りのリボンチャーム：足りない五行「${spec.charmElement}」を補い、バランスを整えるお守りです`,
+    ],
+    footer: '命式シール（仮）― 四柱推命をもとにした贈り物シールです',
+    mainColor: chart.strongestElement,
+  };
+}
 
 export interface EquipmentInfo {
   name: string; // 日本語名
@@ -226,47 +355,47 @@ export function negativePromptOf(tone: Tone): string {
     : `${NEGATIVE_BASE}, horror, grotesque, realistic violence, blood, creepy`;
 }
 
-// 見た目（指定なし／男の子／女の子）の呪文への反映（オーナー決定 2026-11-15）。
+// 見た目（指定なし／男の子／女の子）の呪文への反映（オーナー決定 2026-11-15、v0.1.9 訂正）。
+// 内部的には「男の子＝イケメンアイドルのような顔立ち」「女の子＝アイドルのような顔立ち」として扱う。
+// ただし「アイドル」は歌手・アイドル活動の要素ではなく顔立ちの印象のこと。
+// 呪文に入れるのは顔立ち（少しリアル寄りで整った顔立ち・瞳・眉・笑顔）と髪まわりだけで、
+// ステージ衣装・ヘッドセットマイク・星のアクセサリー等の歌手系の装備・小物は入れない。
 // 人型・精霊型ではキャラそのものを男の子／女の子として書き分ける。
-// 獣型・道具型・群体型では性別表現は付けず、小さな雰囲気の差だけにする。
+// 獣型・道具型・群体型では性別表現は付けず、顔まわりの小さな雰囲気の差だけにする
+// （小物は従来分＝女の子のリボンまで。新規の歌手系小物は足さない）。
 type AppearanceKey = Exclude<Appearance, 'none'>;
 const APPEARANCE_FORM_EN: Partial<Record<FormType, Record<AppearanceKey, string>>> = {
-  人型: { boy: 'a small boy character', girl: 'a cute little girl character', idol: 'a handsome young male idol character' },
-  精霊型: { boy: 'a small boy fairy spirit character', girl: 'a cute little girl fairy spirit character', idol: 'a handsome young male idol fairy spirit character' },
+  人型: { boy: 'a small boy character', girl: 'a cute little girl character' },
+  精霊型: { boy: 'a small boy fairy spirit character', girl: 'a cute little girl fairy spirit character' },
 };
 const APPEARANCE_EXTRA_EN: Record<FormType, Record<AppearanceKey, string>> = {
   人型: {
-    boy: 'Give him a boyish look with short hair and a neat, adventurous outfit.',
-    girl: 'Give her a feminine look with long silky hair, a ribbon hair accessory and a pretty dress-like outfit with lace details.',
-    idol: 'Give him a dazzling handsome-idol look: a stylish sparkly stage outfit, a headset microphone, a star-shaped accessory, and a bright charming idol smile.',
+    boy: 'Give him a handsome idol-like face: slightly realistic, well-defined facial features, sparkling clear eyes, strong neat eyebrows and a fresh, bright smile, with neat short hair.',
+    girl: 'Give her a cute idol-like face: slightly realistic, well-defined facial features, big sparkling eyes, long eyelashes and a bright, cheerful smile, with long silky hair and a ribbon hair accessory.',
   },
   精霊型: {
-    boy: 'Give him a boyish look with short hair and a neat, adventurous outfit.',
-    girl: 'Give her a feminine look with long silky hair, a ribbon hair accessory and a pretty dress-like outfit with lace details.',
-    idol: 'Give him a dazzling handsome-idol look: a stylish sparkly stage outfit, a headset microphone, a star-shaped accessory, and a bright charming idol smile.',
+    boy: 'Give him a handsome idol-like face: slightly realistic, well-defined facial features, sparkling clear eyes, strong neat eyebrows and a fresh, bright smile, with neat short hair.',
+    girl: 'Give her a cute idol-like face: slightly realistic, well-defined facial features, big sparkling eyes, long eyelashes and a bright, cheerful smile, with long silky hair and a ribbon hair accessory.',
   },
   獣型: {
-    boy: 'Add only a small boyish touch: a tiny little cap.',
-    girl: 'Add only a small feminine touch: a cute ribbon and long eyelashes.',
-    idol: 'Add only a small idol touch: a tiny headset microphone and a star-shaped charm.',
+    boy: 'Add only a small boyish touch around the face: strong neat eyebrows and sparkling clear eyes.',
+    girl: 'Add only a small feminine touch around the face: long eyelashes, a soft gentle expression, and a cute ribbon.',
   },
   道具型: {
-    boy: 'Add only a small boyish touch: a tiny little cap.',
-    girl: 'Add only a small feminine touch: a cute ribbon and long eyelashes.',
-    idol: 'Add only a small idol touch: a tiny headset microphone and a star-shaped charm.',
+    boy: 'Add only a small boyish touch around the face: strong neat eyebrows and sparkling clear eyes.',
+    girl: 'Add only a small feminine touch around the face: long eyelashes, a soft gentle expression, and a cute ribbon.',
   },
   群体型: {
-    boy: 'Add only a small boyish touch: tiny little caps.',
-    girl: 'Add only a small feminine touch: cute ribbons and long eyelashes.',
-    idol: 'Add only a small idol touch: tiny headset microphones and star-shaped charms.',
+    boy: 'Add only a small boyish touch around the faces: strong neat eyebrows and sparkling clear eyes.',
+    girl: 'Add only a small feminine touch around the faces: long eyelashes, soft gentle expressions, and cute ribbons.',
   },
 };
 const APPEARANCE_JA: Record<FormType, Record<Appearance, string>> = {
-  人型: { none: '指定なし（AIにおまかせ）', boy: '男の子：男の子キャラとして、短い髪と活発な装い', girl: '女の子：女の子キャラとして、長い髪・リボン・ドレス風の装い', idol: 'イケメンアイドル：イケメンアイドルとして、キラキラしたステージ衣装・ヘッドセットマイク・星のアクセサリー・輝く笑顔' },
-  精霊型: { none: '指定なし（AIにおまかせ）', boy: '男の子：男の子の精霊として、短い髪と活発な装い', girl: '女の子：女の子の精霊として、長い髪・リボン・ドレス風の装い', idol: 'イケメンアイドル：イケメンアイドルの精霊として、キラキラしたステージ衣装・ヘッドセットマイク・星のアクセサリー・輝く笑顔' },
-  獣型: { none: '指定なし（AIにおまかせ）', boy: '男の子：小さな帽子の雰囲気だけ（無理な人型化はしない）', girl: '女の子：リボンとまつ毛の雰囲気だけ（無理な人型化はしない）', idol: 'イケメンアイドル：小さなヘッドセットマイクと星型チャームの雰囲気だけ（無理な人型化はしない）' },
-  道具型: { none: '指定なし（AIにおまかせ）', boy: '男の子：小さな帽子の雰囲気だけ（無理な人型化はしない）', girl: '女の子：リボンとまつ毛の雰囲気だけ（無理な人型化はしない）', idol: 'イケメンアイドル：小さなヘッドセットマイクと星型チャームの雰囲気だけ（無理な人型化はしない）' },
-  群体型: { none: '指定なし（AIにおまかせ）', boy: '男の子：小さな帽子の雰囲気だけ（無理な人型化はしない）', girl: '女の子：リボンとまつ毛の雰囲気だけ（無理な人型化はしない）', idol: 'イケメンアイドル：小さなヘッドセットマイクと星型チャームの雰囲気だけ（無理な人型化はしない）' },
+  人型: { none: '指定なし（AIにおまかせ）', boy: '男の子：イケメンアイドルのような顔立ち（少しリアル寄りで整った顔立ち・キラキラした瞳・凛々しい眉・爽やかな笑顔）と短い髪', girl: '女の子：アイドルのような顔立ち（少しリアル寄りで整った顔立ち・大きな瞳・まつ毛・明るい笑顔）と長い髪・リボン' },
+  精霊型: { none: '指定なし（AIにおまかせ）', boy: '男の子：イケメンアイドルのような顔立ち（少しリアル寄りで整った顔立ち・キラキラした瞳・凛々しい眉・爽やかな笑顔）と短い髪', girl: '女の子：アイドルのような顔立ち（少しリアル寄りで整った顔立ち・大きな瞳・まつ毛・明るい笑顔）と長い髪・リボン' },
+  獣型: { none: '指定なし（AIにおまかせ）', boy: '男の子：凛々しい眉とキラキラした瞳の顔まわりだけ（無理な人型化はしない）', girl: '女の子：まつ毛と柔らかい表情、リボンの顔まわりだけ（無理な人型化はしない）' },
+  道具型: { none: '指定なし（AIにおまかせ）', boy: '男の子：凛々しい眉とキラキラした瞳の顔まわりだけ（無理な人型化はしない）', girl: '女の子：まつ毛と柔らかい表情、リボンの顔まわりだけ（無理な人型化はしない）' },
+  群体型: { none: '指定なし（AIにおまかせ）', boy: '男の子：凛々しい眉とキラキラした瞳の顔まわりだけ（無理な人型化はしない）', girl: '女の子：まつ毛と柔らかい表情、リボンの顔まわりだけ（無理な人型化はしない）' },
 };
 
 export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: Tone = 'normal', appearance: Appearance = 'none'): PromptParts {
