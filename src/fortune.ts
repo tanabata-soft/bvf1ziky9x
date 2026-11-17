@@ -336,6 +336,37 @@ export function normalizeAppearance(value: unknown): Appearance {
   return 'none';
 }
 
+// ---------- 年齢区分（v0.2.5、オーナー確定） ----------
+// 男の子・女の子の見た目では、生年月日から計算した年齢に応じてキャラの年齢感
+// （顔立ちと比率）を変える。年齢は生成時点の今日の日付で計算する満年齢。
+// 利用者は選べない（年齢から自動で決まる）。
+
+export type AgeBand = 'child' | 'youth' | 'adult' | 'middle' | 'mature';
+export const AGE_BAND_LABEL: Record<AgeBand, string> = {
+  child: '子ども', youth: '若者', adult: '青年', middle: '中年', mature: '円熟',
+};
+export const AGE_BAND_RANGE: Record<AgeBand, string> = {
+  child: '12歳まで', youth: '13〜19歳', adult: '20〜39歳', middle: '40〜59歳', mature: '60歳以上',
+};
+
+/** 生年月日から、指定日時点の満年齢を返す（誕生日がまだ来ていなければその分引く） */
+export function ageAt(birth: { y: number; m: number; d: number }, today: Date): number {
+  let age = today.getFullYear() - birth.y;
+  const monthDiff = today.getMonth() + 1 - birth.m;
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.d)) age -= 1;
+  return age;
+}
+
+/** 年齢区分：〜12 子ども／13〜19 若者／20〜39 青年／40〜59 中年／60〜 円熟 */
+export function ageBandOf(birth: { y: number; m: number; d: number }, today: Date = new Date()): AgeBand {
+  const age = ageAt(birth, today);
+  if (age <= 12) return 'child';
+  if (age <= 19) return 'youth';
+  if (age <= 39) return 'adult';
+  if (age <= 59) return 'middle';
+  return 'mature';
+}
+
 export function rarityOf(chart: Chart): Rarity {
   const reasons: string[] = [];
   let points = 0;

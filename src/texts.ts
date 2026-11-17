@@ -1,10 +1,11 @@
 // 読みの文章（最小セット）と装備辞書、英語プロンプトの部品。
 // 装備辞書は「呪文・シルエット・装備の意味表示」の3出口で共用する（仕様書5.1）。
-import type { Appearance, Element, FormType, FortuneStage, Gan, GlamourTier, ShiShen, Tone, YearFortune, Zhi } from './fortune';
+import type { AgeBand, Appearance, Element, FormType, FortuneStage, Gan, GlamourTier, ShiShen, Tone, YearFortune, Zhi } from './fortune';
 import {
   glamourTierOf, decideCharacter, yearFortune,
   GAN_ELEMENT, ZHI_ELEMENT, SANGOU, GOU_PAIRS, ROKUGOU, KEI_PAIRS,
   TONE_OF_STAR, DARK_TONES, TONE_LABEL, toneOfChart,
+  AGE_BAND_LABEL, AGE_BAND_RANGE, APPEARANCE_LABEL,
 } from './fortune';
 import type { CharacterSpec, Chart } from './fortune';
 
@@ -173,6 +174,7 @@ export function fortuneBodyOf(chart: Chart, f: YearFortune): string[] {
 export interface ExplainedTexts {
   personality: string[];
   jobLine: string; // 職業（職業名＋短い理由）。v0.2.4 で追加（オーナー確定）
+  appearanceLines: string[]; // 見た目（年齢感・体格・髪＋それぞれの根拠）。v0.2.5 で追加（オーナー指示）
   fortuneHeading: string;
   fortuneBody: string[];
   equipLines: string[];
@@ -180,13 +182,19 @@ export interface ExplainedTexts {
   mainColor: Element;
 }
 
-export function explainedInfoOf(chart: Chart, year: number): ExplainedTexts {
+export function explainedInfoOf(chart: Chart, year: number, ageBand: AgeBand = 'youth'): ExplainedTexts {
   const spec = decideCharacter(chart);
   const f = yearFortune(chart, year);
   const tone = toneOfChart(chart);
+  const reasons = appearanceReasonLines(chart, spec, ageBand);
   return {
     personality: personalityTextsOf(chart),
     jobLine: `${TONE_LABEL[tone]} ― 最強の星「${chart.strongest}」は${toneReasonOf(chart.strongest)}`,
+    appearanceLines: [
+      `年齢感：${reasons.ageLine}`,
+      `体格：${reasons.buildLine}`,
+      `${hairLabelOf(spec.form)}：${reasons.hairLine}`,
+    ],
     fortuneHeading: `${f.year}年の運勢（${f.stage}）`,
     fortuneBody: fortuneBodyOf(chart, f),
     equipLines: [
@@ -433,42 +441,288 @@ export function negativePromptOf(tone: Tone, appearance: Appearance = 'none'): s
 // 顔立ちの描き込み（瞳・鼻筋・口元・肌の陰影）を強め、比率も約3頭身で少し大人びた指定にする。
 // 獣型・道具型・群体型では性別表現は付けず、顔まわりの小さな雰囲気の差だけにする
 // （小物は従来分＝女の子のリボンまで。新規の歌手系小物は足さない）。
+// v0.2.5: 年齢区分（子ども／若者／青年／中年／円熟）を自動で効かせる（オーナー確定）。
+// 区分は生年月日から生成時点の年齢で決まり（fortune.ts の ageBandOf）、利用者は選べない。
+// 若者の表現は v0.2.2〜v0.2.4 のものをそのまま使う（見本の維持）。
+// 中年は老けさせすぎず、円熟は貫禄と穏やかさで表し、老いの強調（しわ・弱々しさ）はしない。
 type AppearanceKey = Exclude<Appearance, 'none'>;
-const APPEARANCE_FORM_EN: Partial<Record<FormType, Record<AppearanceKey, string>>> = {
-  人型: { boy: 'a handsome young male character with an idol-like face', girl: 'a beautiful young female character with an idol-like face' },
-  精霊型: { boy: 'a handsome young male fairy spirit character with an idol-like face', girl: 'a beautiful young female fairy spirit character with an idol-like face' },
-};
-const APPEARANCE_EXTRA_EN: Record<FormType, Record<AppearanceKey, string>> = {
+type HumanForm = '人型' | '精霊型';
+
+/** 年齢区分ごとの本体表現（人型・精霊型のみ。獣型などは FORM_EN のまま性別表現を付けない） */
+const AGE_FORM_EN: Record<HumanForm, Record<AgeBand, Record<AppearanceKey, string>>> = {
   人型: {
-    boy: 'Give him a handsome idol-like face drawn with slightly realistic, well-defined facial features: large detailed eyes with clearly drawn irises and highlights, a visible nose bridge and well-shaped lips, and soft natural shading on the skin. He has neatly styled short hair, strong tidy eyebrows and a fresh, confident smile.',
-    girl: 'Give her a beautiful idol-like face drawn with slightly realistic, well-defined facial features: large detailed eyes with clearly drawn irises, highlights and long eyelashes, a visible nose bridge and well-shaped lips, and soft natural shading on the skin. She has long silky hair with a ribbon hair accessory and a bright, charming smile.',
+    child: { boy: 'a cheerful little boy character', girl: 'a cheerful little girl character' },
+    youth: { boy: 'a handsome young male character with an idol-like face', girl: 'a beautiful young female character with an idol-like face' },
+    adult: { boy: 'a handsome adult man character with a refined, grown-up face', girl: 'a beautiful adult woman character with a refined, grown-up face' },
+    middle: { boy: 'a dignified middle-aged man character with calm mature charm', girl: 'a dignified middle-aged woman character with calm mature charm' },
+    mature: { boy: 'a dignified mature man character with serene gravitas and warm charm, still vibrant and full of life', girl: 'a dignified mature woman character with serene gravitas and warm charm, still vibrant and full of life' },
   },
   精霊型: {
+    child: { boy: 'a cheerful little boy fairy spirit character', girl: 'a cheerful little girl fairy spirit character' },
+    youth: { boy: 'a handsome young male fairy spirit character with an idol-like face', girl: 'a beautiful young female fairy spirit character with an idol-like face' },
+    adult: { boy: 'a handsome adult man fairy spirit character with a refined, grown-up face', girl: 'a beautiful adult woman fairy spirit character with a refined, grown-up face' },
+    middle: { boy: 'a dignified middle-aged man fairy spirit character with calm mature charm', girl: 'a dignified middle-aged woman fairy spirit character with calm mature charm' },
+    mature: { boy: 'a dignified mature man fairy spirit character with serene gravitas and warm charm, still vibrant and full of life', girl: 'a dignified mature woman fairy spirit character with serene gravitas and warm charm, still vibrant and full of life' },
+  },
+};
+
+/** 年齢区分ごとの顔立ち文（人型・精霊型） */
+const AGE_EXTRA_HUMAN_EN: Record<AgeBand, Record<AppearanceKey, string>> = {
+  child: {
+    boy: 'Give him a cheerful, childlike face: big round eyes with clearly drawn irises and highlights, soft round cheeks, and a bright, innocent smile.',
+    girl: 'Give her a cheerful, childlike face: big round eyes with clearly drawn irises, highlights and long eyelashes, soft round cheeks, and a bright, innocent smile. She wears a ribbon hair accessory.',
+  },
+  youth: {
     boy: 'Give him a handsome idol-like face drawn with slightly realistic, well-defined facial features: large detailed eyes with clearly drawn irises and highlights, a visible nose bridge and well-shaped lips, and soft natural shading on the skin. He has neatly styled short hair, strong tidy eyebrows and a fresh, confident smile.',
     girl: 'Give her a beautiful idol-like face drawn with slightly realistic, well-defined facial features: large detailed eyes with clearly drawn irises, highlights and long eyelashes, a visible nose bridge and well-shaped lips, and soft natural shading on the skin. She has long silky hair with a ribbon hair accessory and a bright, charming smile.',
   },
-  獣型: {
+  adult: {
+    boy: 'Give him a handsome, grown-up face drawn with slightly realistic, well-defined facial features: deep detailed eyes with clearly drawn irises and highlights, a defined nose bridge and well-shaped lips, and soft natural shading on the skin. He has strong tidy eyebrows and a calm, confident smile.',
+    girl: 'Give her a beautiful, grown-up face drawn with slightly realistic, well-defined facial features: deep detailed eyes with clearly drawn irises, highlights and long eyelashes, a defined nose bridge and well-shaped lips, and soft natural shading on the skin. She has a calm, graceful smile and wears a ribbon hair accessory.',
+  },
+  middle: {
+    boy: 'Give him a distinguished face with calm mature charm, drawn with slightly realistic, well-defined facial features: steady detailed eyes with clearly drawn irises and highlights, a defined nose bridge and well-shaped lips, and soft natural shading on the skin. He has strong tidy eyebrows and a composed, reassuring smile. Keep him vibrant and handsome, never aged or weary.',
+    girl: 'Give her a distinguished face with calm mature charm, drawn with slightly realistic, well-defined facial features: steady detailed eyes with clearly drawn irises, highlights and long eyelashes, a defined nose bridge and well-shaped lips, and soft natural shading on the skin. She has a composed, warm smile and wears a ribbon hair accessory. Keep her vibrant and beautiful, never aged or weary.',
+  },
+  mature: {
+    boy: 'Give him a serene, dignified face with the warm gravitas of seasoned years, drawn with slightly realistic, well-defined facial features: calm detailed eyes with clearly drawn irises and highlights, a defined nose bridge and well-shaped lips, and soft natural shading on the skin. He has a gentle, composed smile. Keep him vibrant and full of life, with smooth healthy skin and a strong, lively presence.',
+    girl: 'Give her a serene, dignified face with the warm gravitas of seasoned years, drawn with slightly realistic, well-defined facial features: calm detailed eyes with clearly drawn irises, highlights and long eyelashes, a defined nose bridge and well-shaped lips, and soft natural shading on the skin. She has a gentle, composed smile and wears a ribbon hair accessory. Keep her vibrant and full of life, with smooth healthy skin and a strong, lively presence.',
+  },
+};
+
+/** 年齢区分ごとの顔まわり文（獣型・道具型＝単数の顔、群体型＝複数の顔） */
+const AGE_EXTRA_SINGLE_EN: Record<AgeBand, Record<AppearanceKey, string>> = {
+  child: {
+    boy: 'Add only a small boyish touch around the face: big round sparkling eyes and soft round cheeks.',
+    girl: 'Add only a small girlish touch around the face: big round sparkling eyes, soft round cheeks, and a cute ribbon.',
+  },
+  youth: {
     boy: 'Add only a small boyish touch around the face: strong neat eyebrows and sparkling clear eyes.',
     girl: 'Add only a small feminine touch around the face: long eyelashes, a soft gentle expression, and a cute ribbon.',
   },
-  道具型: {
-    boy: 'Add only a small boyish touch around the face: strong neat eyebrows and sparkling clear eyes.',
-    girl: 'Add only a small feminine touch around the face: long eyelashes, a soft gentle expression, and a cute ribbon.',
+  adult: {
+    boy: 'Add only a small masculine touch around the face: calm, well-defined eyebrows and composed, confident eyes.',
+    girl: 'Add only a small feminine touch around the face: graceful eyelashes, a composed gentle expression, and a cute ribbon.',
   },
-  群体型: {
+  middle: {
+    boy: 'Add only a small masculine touch around the face: steady eyebrows and calm, dignified eyes.',
+    girl: 'Add only a small feminine touch around the face: soft eyelashes, a serene gentle expression, and a cute ribbon.',
+  },
+  mature: {
+    boy: 'Add only a small masculine touch around the face: serene, dignified eyes and a calm, warm expression.',
+    girl: 'Add only a small feminine touch around the face: soft eyelashes, a serene, warm expression, and a cute ribbon.',
+  },
+};
+const AGE_EXTRA_MULTI_EN: Record<AgeBand, Record<AppearanceKey, string>> = {
+  child: {
+    boy: 'Add only a small boyish touch around the faces: big round sparkling eyes and soft round cheeks.',
+    girl: 'Add only a small feminine touch around the faces: big round sparkling eyes, soft round cheeks, and cute ribbons.',
+  },
+  youth: {
     boy: 'Add only a small boyish touch around the faces: strong neat eyebrows and sparkling clear eyes.',
     girl: 'Add only a small feminine touch around the faces: long eyelashes, soft gentle expressions, and cute ribbons.',
   },
-};
-const APPEARANCE_JA: Record<FormType, Record<Appearance, string>> = {
-  人型: { none: '指定なし（AIにおまかせ）', boy: '男の子：アイドルのような顔立ちの若い男性（少しリアル寄りで整った顔立ち・描き込んだ瞳・鼻筋と口元・肌の自然な陰影）。約3頭身で少し大人びた比率、短い髪', girl: '女の子：アイドルのような顔立ちの若い女性（少しリアル寄りで整った顔立ち・描き込んだ瞳・まつ毛・鼻筋と口元・肌の自然な陰影）。約3頭身で少し大人びた比率、長い髪・リボン' },
-  精霊型: { none: '指定なし（AIにおまかせ）', boy: '男の子：アイドルのような顔立ちの若い男性（少しリアル寄りで整った顔立ち・描き込んだ瞳・鼻筋と口元・肌の自然な陰影）。約3頭身で少し大人びた比率、短い髪', girl: '女の子：アイドルのような顔立ちの若い女性（少しリアル寄りで整った顔立ち・描き込んだ瞳・まつ毛・鼻筋と口元・肌の自然な陰影）。約3頭身で少し大人びた比率、長い髪・リボン' },
-  獣型: { none: '指定なし（AIにおまかせ）', boy: '男の子：凛々しい眉とキラキラした瞳の顔まわりだけ（無理な人型化はしない）', girl: '女の子：まつ毛と柔らかい表情、リボンの顔まわりだけ（無理な人型化はしない）' },
-  道具型: { none: '指定なし（AIにおまかせ）', boy: '男の子：凛々しい眉とキラキラした瞳の顔まわりだけ（無理な人型化はしない）', girl: '女の子：まつ毛と柔らかい表情、リボンの顔まわりだけ（無理な人型化はしない）' },
-  群体型: { none: '指定なし（AIにおまかせ）', boy: '男の子：凛々しい眉とキラキラした瞳の顔まわりだけ（無理な人型化はしない）', girl: '女の子：まつ毛と柔らかい表情、リボンの顔まわりだけ（無理な人型化はしない）' },
+  adult: {
+    boy: 'Add only a small masculine touch around the faces: calm, well-defined eyebrows and composed, confident eyes.',
+    girl: 'Add only a small feminine touch around the faces: graceful eyelashes, composed gentle expressions, and cute ribbons.',
+  },
+  middle: {
+    boy: 'Add only a small masculine touch around the faces: steady eyebrows and calm, dignified eyes.',
+    girl: 'Add only a small feminine touch around the faces: soft eyelashes, serene gentle expressions, and cute ribbons.',
+  },
+  mature: {
+    boy: 'Add only a small masculine touch around the faces: serene, dignified eyes and calm, warm expressions.',
+    girl: 'Add only a small feminine touch around the faces: soft eyelashes, serene, warm expressions, and cute ribbons.',
+  },
 };
 
-export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: Tone = 'knight', appearance: Appearance = 'none'): PromptParts {
+/** 見た目の追加文（形態×年齢区分×見た目）。人型・精霊型は顔立ち文、他形態は顔まわりの差だけ */
+function appearanceExtraEn(form: FormType, band: AgeBand, appearance: AppearanceKey): string {
+  if (form === '人型' || form === '精霊型') return AGE_EXTRA_HUMAN_EN[band][appearance];
+  if (form === '群体型') return AGE_EXTRA_MULTI_EN[band][appearance];
+  return AGE_EXTRA_SINGLE_EN[band][appearance];
+}
+
+/** 年齢区分ごとの比率（人型・精霊型で男女指定のときだけ使う。他形態・指定なしは約2.5頭身のまま） */
+const PROPORTIONS_EN: Record<AgeBand, string> = {
+  child: 'about 2.5 heads tall',
+  youth: 'about 3 heads tall, with slightly more mature proportions',
+  adult: 'about 3.5 heads tall, with adult proportions',
+  middle: 'about 3.5 heads tall, with adult proportions',
+  mature: 'about 3.5 heads tall, with adult proportions',
+};
+
+/** 年齢区分ごとの見た目の日本語併記（人型・精霊型） */
+const AGE_JA_HUMAN: Record<AgeBand, Record<AppearanceKey, string>> = {
+  child: {
+    boy: '元気な子どもの顔立ち（大きな瞳・丸い頬・明るい笑顔）。約2.5頭身',
+    girl: '元気な子どもの顔立ち（大きな瞳・まつ毛・丸い頬・明るい笑顔、リボン）。約2.5頭身',
+  },
+  youth: {
+    boy: 'アイドルのような顔立ちの若い男性（少しリアル寄りで整った顔立ち・描き込んだ瞳・鼻筋と口元・肌の自然な陰影）。約3頭身で少し大人びた比率、短い髪',
+    girl: 'アイドルのような顔立ちの若い女性（少しリアル寄りで整った顔立ち・描き込んだ瞳・まつ毛・鼻筋と口元・肌の自然な陰影）。約3頭身で少し大人びた比率、長い髪・リボン',
+  },
+  adult: {
+    boy: '大人の男性として描く（少しリアル寄りで整った大人の顔立ち・落ち着いた自信のある笑顔）。約3.5頭身で大人びた比率',
+    girl: '大人の女性として描く（少しリアル寄りで整った大人の顔立ち・落ち着いた優美な笑顔、リボン）。約3.5頭身で大人びた比率',
+  },
+  middle: {
+    boy: '円熟した大人の魅力のある男性（落ち着いた顔立ちと佇まい。老けさせすぎない）。約3.5頭身で大人びた比率',
+    girl: '円熟した大人の魅力のある女性（落ち着いた顔立ちと佇まい。老けさせすぎない、リボン）。約3.5頭身で大人びた比率',
+  },
+  mature: {
+    boy: '貫禄と穏やかさのある円熟した大人（老いは強調しない。髪に少し銀色が混じる程度）。約3.5頭身で大人びた比率',
+    girl: '貫禄と穏やかさのある円熟した大人（老いは強調しない。髪に少し銀色が混じる程度、リボン）。約3.5頭身で大人びた比率',
+  },
+};
+/** 年齢区分ごとの見た目の日本語併記（獣型・道具型・群体型＝顔まわりだけ） */
+const AGE_JA_OTHER: Record<AgeBand, Record<AppearanceKey, string>> = {
+  child: {
+    boy: '大きな丸い瞳と丸い頬の、元気な子どもの顔まわりだけ（無理な人型化はしない）',
+    girl: '大きな丸い瞳と丸い頬、リボンの、元気な子どもの顔まわりだけ（無理な人型化はしない）',
+  },
+  youth: {
+    boy: '凛々しい眉とキラキラした瞳の顔まわりだけ（無理な人型化はしない）',
+    girl: 'まつ毛と柔らかい表情、リボンの顔まわりだけ（無理な人型化はしない）',
+  },
+  adult: {
+    boy: '落ち着いた凛々しい眉と自信のある瞳の顔まわりだけ（無理な人型化はしない）',
+    girl: 'まつ毛と落ち着いた柔らかい表情、リボンの顔まわりだけ（無理な人型化はしない）',
+  },
+  middle: {
+    boy: '穏やかで凛々しい眉と落ち着いた瞳の顔まわりだけ（無理な人型化はしない）',
+    girl: 'まつ毛と穏やかで柔らかい表情、リボンの顔まわりだけ（無理な人型化はしない）',
+  },
+  mature: {
+    boy: '穏やかで貫禄のある瞳と温かい表情の顔まわりだけ（無理な人型化はしない）',
+    girl: 'まつ毛と穏やかで温かい表情、リボンの顔まわりだけ（無理な人型化はしない）',
+  },
+};
+
+/** 見た目の日本語併記。年齢区分が分かる形（例：「男の子（青年）：…」）にする */
+function appearanceJaOf(form: FormType, appearance: Appearance, band: AgeBand): string {
+  if (appearance === 'none') return '指定なし（AIにおまかせ）';
+  const body = (form === '人型' || form === '精霊型')
+    ? AGE_JA_HUMAN[band][appearance]
+    : AGE_JA_OTHER[band][appearance];
+  return `${APPEARANCE_LABEL[appearance]}（${AGE_BAND_LABEL[band]}）：${body}`;
+}
+
+// ---------- 体格と髪（v0.2.5、オーナー確定） ----------
+// どちらも命式から自動で決まり、利用者は選べない。
+// 体格・全体の雰囲気はいちばん強い五行から、髪の色・髪型は日干の五行から決まる。
+// 髪色は年齢区分によらず五行どおり（円熟だけ、髪に少し銀色が混じる程度を許す）。
+
+export interface ElementText { en: string; ja: string }
+
+const BUILD_TEXT: Record<Element, { strong: string; weak: string; ja: string }> = {
+  木: {
+    strong: 'The character has a tall, slender, supple build with a fresh, breezy presence.',
+    weak: 'The character has a fresh, breezy air and a light, supple silhouette.',
+    ja: 'すらりと伸びやかな体格で、爽やかな雰囲気',
+  },
+  火: {
+    strong: 'The character has a radiant, glamorous presence, bright and full of lively energy.',
+    weak: 'The character has a bright, glamorous air, full of lively energy.',
+    ja: '華やかで明るい存在感',
+  },
+  土: {
+    strong: 'The character has a calm, solid, reassuringly sturdy build.',
+    weak: 'The character has a calm, solid, grounded silhouette.',
+    ja: '穏やかでどっしりとした体格',
+  },
+  金: {
+    strong: 'The character has a sharp, crisp, dignified silhouette.',
+    weak: 'The character has a sharp, crisp silhouette.',
+    ja: 'シャープで凛々しいシルエット',
+  },
+  水: {
+    strong: 'The character has a soft, graceful build with a mysterious, fluid air.',
+    weak: 'The character has a soft, mysterious, fluid air.',
+    ja: '柔らかく神秘的な雰囲気',
+  },
+};
+
+/** 体格・全体の雰囲気（いちばん強い五行から）。人型・精霊型は体格として強く、他形態は雰囲気・シルエットの含みとして弱く */
+export function buildTextOf(el: Element, form: FormType): ElementText {
+  const t = BUILD_TEXT[el];
+  const human = form === '人型' || form === '精霊型';
+  return { en: human ? t.strong : t.weak, ja: t.ja };
+}
+
+const HAIR_EN: Record<Element, string> = {
+  木: 'green-tinged brown hair, sleek and straight',
+  火: 'reddish hair in a bright, lively, dynamic style',
+  土: 'calm brown hair in a gentle, relaxed style',
+  金: 'bright silvery-gold hair in a sharp, neat style',
+  水: 'black to deep blue hair, soft and flowing',
+};
+/** 獣型の毛並み・道具型／群体型の差し色に使う色合い（英語） */
+const HAIR_TONE_EN: Record<Element, string> = {
+  木: 'green-tinged brown', 火: 'warm reddish', 土: 'calm brown', 金: 'bright silvery-gold', 水: 'black to deep blue',
+};
+const HAIR_JA: Record<Element, string> = {
+  木: '茶色から緑がかった髪で、しなやかでまっすぐな髪型',
+  火: '赤みのある髪で、明るく動きのある髪型',
+  土: '落ち着いた茶色の髪で、穏やかな髪型',
+  金: '銀に近い明るい髪で、シャープな髪型',
+  水: '黒から深い青の髪で、柔らかく流れる髪型',
+};
+const HAIR_COAT_JA: Record<Element, string> = {
+  木: '緑がかった茶色の毛並み', 火: '赤みのある毛並み', 土: '落ち着いた茶色の毛並み',
+  金: '銀に近い明るい毛並み', 水: '黒から深い青の毛並み',
+};
+const HAIR_ACCENT_JA: Record<Element, string> = {
+  木: '緑がかった茶色の差し色', 火: '赤みのある色の差し色', 土: '落ち着いた茶色の差し色',
+  金: '銀に近い明るい色の差し色', 水: '黒から深い青の差し色',
+};
+
+/** 髪の色・髪型（日干の五行から）。人型・精霊型は髪、獣型は毛並みの色合い、道具型・群体型は差し色 */
+export function hairTextOf(el: Element, form: FormType, band: AgeBand): ElementText {
+  if (form === '人型' || form === '精霊型') {
+    // 円熟だけ、髪に少し銀色が混じる程度を許す（髪色そのものは年齢によらず五行どおり）
+    const silver = band === 'mature' ? ', with a few silver strands mixed in' : '';
+    const silverJa = band === 'mature' ? '、少し銀色が混じる' : '';
+    return {
+      en: `The character has ${HAIR_EN[el]}${silver}.`,
+      ja: `${HAIR_JA[el]}${silverJa}`,
+    };
+  }
+  if (form === '獣型') {
+    return { en: `Its coat and fur carry ${HAIR_TONE_EN[el]} tones.`, ja: HAIR_COAT_JA[el] };
+  }
+  return { en: `Accent colors in ${HAIR_TONE_EN[el]} tones appear on the character.`, ja: HAIR_ACCENT_JA[el] };
+}
+
+/** 髪まわりの部品ラベル（形態で変わる：髪／毛並み／差し色） */
+export function hairLabelOf(form: FormType): string {
+  if (form === '人型' || form === '精霊型') return '髪';
+  if (form === '獣型') return '毛並み';
+  return '差し色';
+}
+
+export interface AppearanceReasons {
+  ageLine: string; // 年齢感と根拠
+  buildLine: string; // 体格と根拠
+  hairLine: string; // 髪（毛並み・差し色）と根拠
+}
+
+/**
+ * 外見が「なぜそうなったか」の理由文（年齢区分・体格・髪）。
+ * 詳細画面の「分身キャラの設計」と解説つきシールで共用し、表示箇所でずれないようにする。
+ */
+export function appearanceReasonLines(chart: Chart, spec: CharacterSpec, band: AgeBand): AppearanceReasons {
+  const build = buildTextOf(chart.strongestElement, spec.form);
+  const dayEl = GAN_ELEMENT[chart.dayGan];
+  const hair = hairTextOf(dayEl, spec.form, band);
+  return {
+    ageLine: `${AGE_BAND_LABEL[band]} ― 年齢の区分（${AGE_BAND_RANGE[band]}）から`,
+    buildLine: `${build.ja} ― いちばん強い五行『${chart.strongestElement}』の性質から`,
+    hairLine: `${hair.ja} ― 日干『${chart.dayGan}』（${dayEl}）の性質から`,
+  };
+}
+
+export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: Tone = 'knight', appearance: Appearance = 'none', ageBand: AgeBand = 'youth'): PromptParts {
   const dayPillar = chart.pillars[2];
   const expr = DISHI_EN[dayPillar.diShi] ?? 'a gentle expression';
   const main = EQUIPMENT[spec.mainEq.shiShen];
@@ -479,19 +733,27 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
   });
   const season = seasonOf(spec.seasonZhi);
   const tier = glamourTierOf(stars);
+  const human = spec.form === '人型' || spec.form === '精霊型';
   const formPhrase = appearance === 'none'
     ? FORM_EN[spec.form]
-    : (APPEARANCE_FORM_EN[spec.form]?.[appearance] ?? FORM_EN[spec.form]);
-  // 人型・精霊型で男の子・女の子を指定したときだけ、少し大人びた比率にする（v0.2.2）
-  const matureProportions = appearance !== 'none' && (spec.form === '人型' || spec.form === '精霊型');
-  const proportions = matureProportions
-    ? 'about 3 heads tall, with slightly more mature proportions'
+    : spec.form === '人型' || spec.form === '精霊型'
+      ? AGE_FORM_EN[spec.form][ageBand][appearance]
+      : FORM_EN[spec.form];
+  // 比率：人型・精霊型で男女指定のときだけ年齢区分で変える（v0.2.2 の約3頭身は若者の指定）
+  const proportions = appearance !== 'none' && human
+    ? PROPORTIONS_EN[ageBand]
     : 'about 2.5 heads tall';
+  // 体格（最強の五行）と髪（日干の五行）は、見た目の指定によらず命式から常に入れる（v0.2.5）
+  const build = buildTextOf(chart.strongestElement, spec.form);
+  const dayEl = GAN_ELEMENT[chart.dayGan];
+  const hair = hairTextOf(dayEl, spec.form, ageBand);
   const lines = [
     'Square image, 1:1 aspect ratio. The character and the sparkling background fill the entire square canvas from edge to edge.',
     `A chibi character sticker illustration in the style of 1980s Japanese sparkling prize stickers. Super-deformed, ${proportions}, bold outlines, vivid colors, ${SPARKLE_EN[tier]}.`,
     `The character is ${formPhrase}, ${BODY_EN[chart.dayGan]}, with ${expr}.`,
-    ...(appearance === 'none' ? [] : [APPEARANCE_EXTRA_EN[spec.form][appearance]]),
+    build.en,
+    hair.en,
+    ...(appearance === 'none' ? [] : [appearanceExtraEn(spec.form, ageBand, appearance)]),
     ...(TONE_INFO[tone].moodEn ? [TONE_INFO[tone].moodEn] : []),
     `It carries ${sizePhrase(spec.mainEq.sizeTier, main.en, true)}.`,
     ...(subs.length ? [`Also: ${subs.join(', and ')}.`] : []),
@@ -504,7 +766,9 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
     { label: '画角', value: '正方形（1:1）。キャラと背景が正方形の全面に広がる' },
     { label: '背景の派手さ（レア度）', value: SPARKLE_JA[tier] },
     { label: '職業', value: TONE_INFO[tone].moodJa },
-    { label: '見た目', value: APPEARANCE_JA[spec.form][appearance] },
+    { label: '見た目', value: appearanceJaOf(spec.form, appearance, ageBand) },
+    { label: '体格（最強の五行）', value: `${build.ja}（最強の五行・${chart.strongestElement}）` },
+    { label: hairLabelOf(spec.form), value: `${hair.ja}（日干・${chart.dayGan}＝${dayEl}）` },
     { label: '本体（日干）', value: `${chart.dayGan}＝${BODY_EN[chart.dayGan]}（日干のモチーフ）` },
     { label: '形態', value: spec.form },
     { label: '素の表情（日柱の十二運）', value: `${dayPillar.diShi}＝${expr}` },

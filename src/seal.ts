@@ -266,6 +266,7 @@ export function loadImageFromUrl(src: string): Promise<HTMLImageElement> {
 export interface ExplainedInfo {
   personality: string[]; // 性格ひとこと（段落ごと）
   jobLine: string; // 職業（職業名＋短い理由、1行）
+  appearanceLines: string[]; // 見た目（年齢感・体格・髪＋根拠、1行ずつ）
   fortuneHeading: string; // 例: 2026年の運勢（吉）
   fortuneBody: string[]; // 運勢の短文（段落ごと）
   equipLines: string[]; // 装備の意味（1行=1装備、折り返し可）
@@ -319,6 +320,7 @@ export function composeExplainedSeal(sealImg: HTMLImageElement, info: ExplainedI
   const sections: Section[] = [
     build('性格', info.personality),
     build('職業', [info.jobLine]),
+    build('見た目', info.appearanceLines),
     build(info.fortuneHeading, info.fortuneBody),
     build('装備の意味', info.equipLines),
   ];

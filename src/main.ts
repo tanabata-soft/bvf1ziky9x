@@ -1,14 +1,14 @@
 import './style.css';
 import {
   computeChart, decideCharacter, rarityOf, yearFortune, glamourTierOf, GLAMOUR_LABEL,
-  toneOfChart, TONE_LABEL, APPEARANCE_LABEL,
+  toneOfChart, TONE_LABEL, APPEARANCE_LABEL, ageBandOf,
   type Appearance, type BirthInput, type Chart,
 } from './fortune';
 import { shareOrCopyText, type ShareOutcome } from './share';
 import {
   DAY_GAN_TEXT, STRONGEST_TEXT,
   EQUIPMENT, prefixTitleOf, POSTFIX_TITLE, ELEMENT_COLOR, buildPrompt, seasonOf, SEASON_JA,
-  fortuneBodyOf, explainedInfoOf, toneReasonOf,
+  fortuneBodyOf, explainedInfoOf, toneReasonOf, appearanceReasonLines, hairLabelOf,
 } from './texts';
 import { silhouetteSvg } from './silhouette';
 import { buildDisplayName } from './name';
@@ -244,7 +244,10 @@ function renderReading(person: Person, opts: ReadingOpts): string {
   const jobReason = toneReasonOf(chart.strongest);
   const jobBecause = jobReason.endsWith('星') ? jobReason.slice(0, -1) : `${jobReason}を持つ`;
   const dn = displayName(person.nickname, chart, opts.showPostfix);
-  const prompt = buildPrompt(chart, spec, rarity.stars, tone, opts.appearance);
+  // 年齢区分は生年月日から今日の年齢で決まる（v0.2.5）。見た目の年齢感にだけ効く
+  const ageBand = ageBandOf(person.birth);
+  const appearanceReasons = appearanceReasonLines(chart, spec, ageBand);
+  const prompt = buildPrompt(chart, spec, rarity.stars, tone, opts.appearance, ageBand);
   const tier = glamourTierOf(rarity.stars);
   const now = new Date();
   const thisYear = now.getFullYear();
@@ -331,6 +334,9 @@ function renderReading(person: Person, opts: ReadingOpts): string {
       <li><strong>背景の季節</strong>：月支から「${SEASON_JA[seasonOf(spec.seasonZhi)]}」</li>
       <li><strong>素の表情</strong>：日柱の十二運「${dayPillar.diShi}」</li>
       <li><strong>職業</strong>：${TONE_LABEL[tone]} ― 最強の星『${chart.strongest}』は${jobBecause}ため。称号・呪文・シールの帯の色に反映されます</li>
+      <li><strong>見た目の年齢感</strong>：${appearanceReasons.ageLine}。男の子・女の子の呪文に反映されます</li>
+      <li><strong>体格</strong>：${appearanceReasons.buildLine}。呪文に反映されます</li>
+      <li><strong>${hairLabelOf(spec.form)}</strong>：${appearanceReasons.hairLine}。呪文に反映されます</li>
     </ul>
   </section>
 
@@ -371,7 +377,7 @@ function renderReading(person: Person, opts: ReadingOpts): string {
 async function buildExplainedDataUrl(person: Person, sealImage: string): Promise<string> {
   const chart = computeChart(person.birth);
   const sealImg = await loadImageFromUrl(sealImage);
-  const canvas = composeExplainedSeal(sealImg, explainedInfoOf(chart, new Date().getFullYear()));
+  const canvas = composeExplainedSeal(sealImg, explainedInfoOf(chart, new Date().getFullYear(), ageBandOf(person.birth)));
   return canvasToDataUrl(canvas);
 }
 

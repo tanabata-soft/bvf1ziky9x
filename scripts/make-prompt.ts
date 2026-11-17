@@ -9,14 +9,16 @@
 //   --time HH:MM      出生時刻（省略時・「unknown」指定時は時刻不明として計算）
 //   --appearance none|boy|girl   見た目（省略時は none＝指定なし。idol は boy に読み替える）
 // トーンは利用者が選ぶものではなく、最強の通変からの自動ルール（defaultToneOf）で決まる（v0.2.3〜）。
+// 年齢区分（子ども／若者／青年／中年／円熟）・体格（最強の五行）・髪（日干の五行）も命式と年齢から自動で決まる（v0.2.5〜）。
 declare const process: { argv: string[]; exit: (code?: number) => never };
 
 import {
   computeChart, decideCharacter, rarityOf, toneOfChart, normalizeAppearance,
   glamourTierOf, GLAMOUR_LABEL, TONE_LABEL, APPEARANCE_LABEL, ZHI_ANIMAL,
+  ageBandOf, AGE_BAND_LABEL,
   type Appearance, type BirthInput,
 } from '../src/fortune';
-import { buildPrompt, EQUIPMENT, prefixTitleOf, POSTFIX_TITLE, toneReasonOf } from '../src/texts';
+import { buildPrompt, EQUIPMENT, prefixTitleOf, POSTFIX_TITLE, toneReasonOf, appearanceReasonLines, hairLabelOf } from '../src/texts';
 import { buildDisplayName } from '../src/name';
 
 const USAGE = `使い方: node scripts/make-prompt.mjs <ニックネーム> <YYYY-MM-DD> [--time HH:MM|unknown] [--appearance none|boy|girl]`;
@@ -75,7 +77,10 @@ function main(): void {
   const postfix = POSTFIX_TITLE[chart.dayGan];
   // アプリの既定表示はポストフィックスなし（詳細画面で付け外しできる）
   const displayName = buildDisplayName(prefix, nickname, '');
-  const prompt = buildPrompt(chart, spec, rarity.stars, tone, appearance);
+  // 年齢区分は生年月日から今日の年齢で決まる（アプリと同じルール、v0.2.5）
+  const ageBand = ageBandOf(birth);
+  const appearanceReasons = appearanceReasonLines(chart, spec, ageBand);
+  const prompt = buildPrompt(chart, spec, rarity.stars, tone, appearance, ageBand);
 
   const pillarLine = chart.pillars.map((p) => `${p.label} ${p.gz}`).join('／');
   const subLine = spec.subEq.length
@@ -90,7 +95,11 @@ function main(): void {
   console.log(`命式：${pillarLine}（日干：${chart.dayGan}／出生時刻：${timeNote}）`);
   console.log(`形態：${spec.form}／メイン装備：${EQUIPMENT[spec.mainEq.shiShen].name}（${spec.mainEq.shiShen}）／サブ装備：${subLine}`);
   console.log(`補いのお守り：${spec.charmElement}の色のリボンチャーム／相棒：${ZHI_ANIMAL[spec.companionZhi]}（日支 ${spec.companionZhi}）／紋章：年支 ${spec.crestZhi}`);
-  console.log(`職業：${TONE_LABEL[tone]}（最強の星・${chart.strongest}から自動決定：${toneReasonOf(chart.strongest)}）／見た目：${APPEARANCE_LABEL[appearance]}／レア度：星${rarity.stars}（${GLAMOUR_LABEL[glamourTierOf(rarity.stars)]}）`);
+  const appearanceNote = appearance === 'none'
+    ? APPEARANCE_LABEL[appearance]
+    : `${APPEARANCE_LABEL[appearance]}（年齢区分：${AGE_BAND_LABEL[ageBand]}）`;
+  console.log(`職業：${TONE_LABEL[tone]}（最強の星・${chart.strongest}から自動決定：${toneReasonOf(chart.strongest)}）／見た目：${appearanceNote}／レア度：星${rarity.stars}（${GLAMOUR_LABEL[glamourTierOf(rarity.stars)]}）`);
+  console.log(`外見の理由：年齢感 ${appearanceReasons.ageLine}／体格 ${appearanceReasons.buildLine}／${hairLabelOf(spec.form)} ${appearanceReasons.hairLine}`);
   console.log('');
   console.log('===== 呪文（英語プロンプト） =====');
   console.log(prompt.prompt);
