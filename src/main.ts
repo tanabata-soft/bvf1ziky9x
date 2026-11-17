@@ -20,8 +20,10 @@ import {
   loadEntries, addEntry, updateEntry, getEntry, hasSealImage,
   type Entry,
 } from './store';
+import { setupUpdateBanner } from './pwa';
 
-const APP_VERSION = '0.1.9';
+// バージョンは package.json の version が元（vite.config.ts が埋め込む）
+const APP_VERSION = __APP_VERSION__;
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 interface Person {
@@ -721,10 +723,12 @@ function render() {
   }
 }
 
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => { /* 試作版では失敗しても続行 */ });
-  });
+// Service Worker の登録と「更新」ボタン（vite-plugin-pwa が sw.js を自動生成する）
+const updateBanner = document.querySelector<HTMLElement>('#update-banner');
+const updateButton = document.querySelector<HTMLButtonElement>('#update-button');
+const updateLater = document.querySelector<HTMLElement>('#update-later');
+if (updateBanner && updateButton && updateLater) {
+  setupUpdateBanner(updateBanner, updateButton, updateLater);
 }
 
 render();

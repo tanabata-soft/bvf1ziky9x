@@ -186,3 +186,32 @@ button.btn-fail {
   button { transition: none; }
   button:active { transform: none; }
 }
+
+/* ---------- 更新バナー（PWA テンプレートの作法） ---------- */
+[hidden] { display: none !important; }
+
+.update-banner {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 448px;
+  margin: 0 auto;
+  padding: 8px 8px 8px 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.2);
+  z-index: 1000;
+  font-size: 14px;
+}
+
+.update-banner__actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}

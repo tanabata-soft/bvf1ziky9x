@@ -1,18 +1,23 @@
 {
   "name": "meishiki-seal",
   "private": true,
-  "version": "0.1.9",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:dist": "node scripts/check-dist.mjs",
+    "icons": "node scripts/make-icons.mjs",
+    "verify": "npm test && npm run build && npm run check:dist"
   },
   "devDependencies": {
     "typescript": "~7.0.2",
     "vite": "^8.3.6",
-    "vitest": "^5.1.0"
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.1.0",
+    "workbox-window": "^7.4.1"
   },
   "dependencies": {
     "lunar-typescript": "^1.8.7"
