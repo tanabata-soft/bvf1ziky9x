@@ -2,15 +2,29 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
-    <link rel="manifest" href="./manifest.webmanifest" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="./icons/icon.svg" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#7b4b94" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="命式シール（仮）" />
     <title>命式シール（仮）試作版</title>
-    <script type="module" crossorigin src="./assets/index-O4nv96W-.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-C5Naw9og.css">
-  </head>
+    <script type="module" crossorigin src="./assets/index-BDDzU4fq.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Chfmd0Kc.css">
+  <link rel="manifest" href="./manifest.webmanifest"></head>
   <body>
     <div id="app"></div>
+
+    <!-- 新しい版があるときに出る。「更新」で切り替わる。「あとで」で閉じる（次に開いたとき、また出る） -->
+    <div id="update-banner" class="update-banner" role="status" hidden>
+      <span>更新があります</span>
+      <div class="update-banner__actions">
+        <button id="update-later" type="button">あとで</button>
+        <button id="update-button" type="button" class="primary">更新</button>
+      </div>
+    </div>
+
   </body>
 </html>
