@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { computeChart, yearFortune } from '../src/fortune';
 import { explainedInfoOf, personalityTextsOf, fortuneBodyOf } from '../src/texts';
@@ -61,6 +62,24 @@ describe('読み文面のバリエーション（日干が同じ丙の2人）', 
     const b = explainedInfoOf(august, 2026);
     expect(a.personality.join('\n')).not.toBe(b.personality.join('\n'));
     expect(a.fortuneBody.join('\n')).not.toBe(b.fortuneBody.join('\n'));
+  });
+});
+
+// v0.2.11: 解説つきシールの節の順序は「性格／運勢／職業／見た目／装備の意味」
+// （オーナー指示「説明文は性格と運勢が先にあった方がいい」。対象はシール合成のみ）
+describe('解説つきシールの節の順序（composeExplainedSeal）', () => {
+  it('性格→運勢→職業→見た目→装備の意味 の順で並ぶ', () => {
+    const sealSrc = readFileSync(new URL('../src/seal.ts', import.meta.url), 'utf8');
+    const order = [
+      "build('性格', info.personality)",
+      'build(info.fortuneHeading, info.fortuneBody)',
+      "build('職業', [info.jobLine])",
+      "build('見た目', info.appearanceLines)",
+      "build('装備の意味', info.equipLines)",
+    ];
+    const positions = order.map((s) => sealSrc.indexOf(s));
+    expect(positions.every((p) => p >= 0)).toBe(true);
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
   });
 });
 

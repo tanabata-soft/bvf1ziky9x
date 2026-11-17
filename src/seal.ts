@@ -317,11 +317,12 @@ export function composeExplainedSeal(sealImg: HTMLImageElement, info: ExplainedI
     measure.font = BODY_FONT;
     return { heading, lines: paras.flatMap((p) => wrapLines(measure, p, TEXT_W)) };
   };
+  // 節の順序（v0.2.11、オーナー指示）: 性格と運勢を先に、その後に職業・見た目・装備の意味
   const sections: Section[] = [
     build('性格', info.personality),
+    build(info.fortuneHeading, info.fortuneBody),
     build('職業', [info.jobLine]),
     build('見た目', info.appearanceLines),
-    build(info.fortuneHeading, info.fortuneBody),
     build('装備の意味', info.equipLines),
   ];
   const TOP_PAD = 46;
