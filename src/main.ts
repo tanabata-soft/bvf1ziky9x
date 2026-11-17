@@ -334,10 +334,8 @@ function renderReading(person: Person, opts: ReadingOpts): string {
       <li><strong>背景の季節</strong>：月支から「${SEASON_JA[seasonOf(spec.seasonZhi)]}」</li>
       <li><strong>素の表情</strong>：日柱の十二運「${dayPillar.diShi}」</li>
       <li><strong>職業</strong>：${TONE_LABEL[tone]} ― 最強の星『${chart.strongest}』は${jobBecause}ため。装いは${outfitTextOf(tone, spec).shortJa}。称号・呪文・シールの帯の色に反映されます</li>
-      <li><strong>見た目の年齢感</strong>：${appearanceReasons.ageLine}。男の子・女の子の呪文に反映されます</li>
       <li><strong>体格</strong>：${appearanceReasons.buildLine}。呪文に反映されます</li>
       <li><strong>${hairLabelOf(spec.form)}</strong>：${appearanceReasons.hairLine}。呪文に反映されます</li>
-      <li><strong>顔の装飾</strong>：${appearanceReasons.ornamentLine}。呪文に反映されます</li>
     </ul>
   </section>
 

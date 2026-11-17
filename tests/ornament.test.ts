@@ -164,31 +164,31 @@ describe('頭にサブ装備が乗る命式では装飾を弱める（装備が�
   });
 });
 
-describe('外見の理由の説明に装飾が入る（設計欄・解説つきシール・CLI）', () => {
+describe('装飾の理由文と「見た目」の説明（v0.2.10：作り手都合の注記と装飾の行は出さない）', () => {
   const yuto = computeChart({ y: 2010, m: 10, d: 28, hour: null, minute: 0 });
   const yutoSpec = decideCharacter(yuto);
 
-  it('appearanceReasonLines の装飾行に、装飾と職業の根拠が入る', () => {
+  it('appearanceReasonLines の装飾行は、命式由来の根拠だけ（優先順位などの作り手都合の注記は出さない）', () => {
     const r = appearanceReasonLines(yuto, yutoSpec, 'youth');
     expect(r.ornamentLine).toContain('サーカレット');
     expect(r.ornamentLine).toContain('職業『騎士』から');
-    expect(r.ornamentLine).toContain('小さく'); // ゆうとは頭に装備がある
+    // ゆうとは頭に装備があり装飾は小さい版だが、その理由（優先）は理由文に出さない
+    expect(r.ornamentLine).not.toContain('優先');
+    expect(r.ornamentLine).not.toContain('小さく');
   });
 
-  it('explainedInfoOf の「見た目」節に顔の装飾の行が入る', () => {
+  it('explainedInfoOf の「見た目」節に顔の装飾の行は出さない（体格・髪の2行）', () => {
     const info = explainedInfoOf(yuto, 2026, 'youth');
-    expect(info.appearanceLines).toHaveLength(4);
+    expect(info.appearanceLines).toHaveLength(2);
     const line = info.appearanceLines.find((l) => l.startsWith('顔の装飾：'));
-    expect(line).toBeDefined();
-    expect(line!).toContain('騎士');
+    expect(line).toBeUndefined();
   });
 
-  it('詳細画面（main.ts）の設計表示と CLI にも装飾の行がある', () => {
+  it('詳細画面（main.ts）の設計表示と CLI の外見の理由にも装飾の行は出さない', () => {
     const mainSrc = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
-    expect(mainSrc).toContain('<strong>顔の装飾</strong>');
-    expect(mainSrc).toContain('appearanceReasons.ornamentLine');
+    expect(mainSrc).not.toContain('<strong>顔の装飾</strong>');
+    expect(mainSrc).not.toContain('appearanceReasons.ornamentLine');
     const cliSrc = readFileSync(new URL('../scripts/make-prompt.ts', import.meta.url), 'utf8');
-    expect(cliSrc).toContain('顔の装飾');
-    expect(cliSrc).toContain('appearanceReasons.ornamentLine');
+    expect(cliSrc).not.toContain('appearanceReasons.ornamentLine');
   });
 });

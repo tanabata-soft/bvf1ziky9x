@@ -107,9 +107,12 @@ describe('イケオジ風（男の子×中年・円熟）', () => {
     expect(mat.ageLine).not.toContain('イケオジ');
   });
 
-  it('解説つきシールの「見た目」節にもイケオジ風の説明は出さない', () => {
+  it('解説つきシールの「見た目」節にもイケオジ風の説明は出さない（体格・髪の2行のみ）', () => {
     const info = explainedInfoOf(chart, 2026, 'middle');
-    expect(info.appearanceLines[0]).toContain('中年 ― 年齢の区分（40〜59歳）から');
-    expect(info.appearanceLines[0]).not.toContain('イケオジ');
+    expect(info.appearanceLines).toHaveLength(2);
+    const joined = info.appearanceLines.join('\n');
+    expect(joined).not.toContain('イケオジ');
+    expect(joined).not.toContain('年齢感');
+    expect(joined).not.toContain('顔の装飾');
   });
 });

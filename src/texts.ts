@@ -174,7 +174,7 @@ export function fortuneBodyOf(chart: Chart, f: YearFortune): string[] {
 export interface ExplainedTexts {
   personality: string[];
   jobLine: string; // 職業（職業名＋短い理由＋装い）。v0.2.4 で追加、装いは v0.2.8
-  appearanceLines: string[]; // 見た目（年齢感・体格・髪・顔の装飾＋それぞれの根拠）。v0.2.5 で追加、装飾は v0.2.6
+  appearanceLines: string[]; // 見た目（体格・髪＋それぞれの根拠）。v0.2.5 で追加。年齢感の行と顔の装飾の行は v0.2.10 で削除（オーナー指示：年齢感も、職業由来の装飾も、見た目の説明には出さない。どちらも呪文への反映は維持）
   fortuneHeading: string;
   fortuneBody: string[];
   equipLines: string[];
@@ -191,10 +191,8 @@ export function explainedInfoOf(chart: Chart, year: number, ageBand: AgeBand = '
     personality: personalityTextsOf(chart),
     jobLine: `${TONE_LABEL[tone]} ― 最強の星「${chart.strongest}」は${toneReasonOf(chart.strongest)}／装いは${outfitTextOf(tone, spec).shortJa}`,
     appearanceLines: [
-      `年齢感：${reasons.ageLine}`,
       `体格：${reasons.buildLine}`,
       `${hairLabelOf(spec.form)}：${reasons.hairLine}`,
-      `顔の装飾：${reasons.ornamentLine}`,
     ],
     fortuneHeading: `${f.year}年の運勢（${f.stage}）`,
     fortuneBody: fortuneBodyOf(chart, f),
@@ -924,6 +922,14 @@ export interface AppearanceReasons {
 }
 
 /**
+ * 理由文に出してよいのは命式由来の根拠だけ（年齢の区分／最強の五行／日干／職業）。
+ * 作り手都合の注記（装備の優先順位や、小さい版にした理由など）は、受け取る人に
+ * 不要なので理由文には出さない（v0.2.10、オーナー指示）。呪文側の制御は維持する。
+ * 装飾の日本語名に埋め込まれた「（…優先…）」の注記は、理由文では落とす。
+ */
+const stripMakerNote = (s: string): string => s.replace(/（[^）]*優先[^）]*）/g, '');
+
+/**
  * 外見が「なぜそうなったか」の理由文（年齢区分・体格・髪・顔の装飾）。
  * 詳細画面の「分身キャラの設計」と解説つきシールで共用し、表示箇所でずれないようにする。
  */
@@ -937,7 +943,7 @@ export function appearanceReasonLines(chart: Chart, spec: CharacterSpec, band: A
     ageLine: `${AGE_BAND_LABEL[band]} ― 年齢の区分（${AGE_BAND_RANGE[band]}）から`,
     buildLine: `${build.ja} ― いちばん強い五行『${chart.strongestElement}』の性質から`,
     hairLine: `${hair.ja} ― 日干『${chart.dayGan}』（${dayEl}）の性質から`,
-    ornamentLine: `${ornament.ja} ― 職業『${TONE_LABEL[tone]}』から${ornament.weakened ? '（頭のサブ装備を優先して小さく）' : ''}`,
+    ornamentLine: `${stripMakerNote(ornament.ja)} ― 職業『${TONE_LABEL[tone]}』から`,
   };
 }
 

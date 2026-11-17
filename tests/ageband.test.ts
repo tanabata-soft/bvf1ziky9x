@@ -274,31 +274,29 @@ describe('外見の理由の説明（設計欄と解説つきシールで共用�
     expect(r.hairLine).toContain('金');
   });
 
-  it('explainedInfoOf の「見た目」節に年齢感・体格・髪・顔の装飾と根拠が入る', () => {
+  it('explainedInfoOf の「見た目」節は体格・髪の2行（年齢感・顔の装飾は出さない。v0.2.10）', () => {
     const info = explainedInfoOf(chart, 2026, band);
-    expect(info.appearanceLines).toHaveLength(4);
+    expect(info.appearanceLines).toHaveLength(2);
     const joined = info.appearanceLines.join('\n');
-    expect(joined).toContain('年齢感');
-    expect(joined).toContain('若者');
     expect(joined).toContain('体格');
     expect(joined).toContain('シャープ');
     expect(joined).toContain('『金』');
     expect(joined).toContain('髪');
     expect(joined).toContain('銀に近い');
     expect(joined).toContain('『辛』');
-    expect(joined).toContain('顔の装飾');
-    expect(joined).toContain('職業『騎士』から');
+    expect(joined).not.toContain('年齢感');
+    expect(joined).not.toContain('顔の装飾');
     // 既存の節はそのまま
     expect(info.personality.length).toBeGreaterThanOrEqual(2);
     expect(info.jobLine).toContain('騎士');
     expect(info.equipLines.some((l) => l.includes('勲章とマント'))).toBe(true);
   });
 
-  it('詳細画面（main.ts）の設計表示にも同じ理由が出る', () => {
+  it('詳細画面（main.ts）の設計表示にも同じ理由が出る（年齢感の行は出さない）', () => {
     const mainSrc = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
     expect(mainSrc).toContain('appearanceReasonLines');
     expect(mainSrc).toContain('ageBandOf');
-    expect(mainSrc).toContain('<strong>見た目の年齢感</strong>');
+    expect(mainSrc).not.toContain('<strong>見た目の年齢感</strong>');
     expect(mainSrc).toContain('<strong>体格</strong>');
     // 解説つきシールの生成でも年齢区分を渡す
     expect(mainSrc).toContain('explainedInfoOf(chart, new Date().getFullYear(), ageBandOf(person.birth))');
