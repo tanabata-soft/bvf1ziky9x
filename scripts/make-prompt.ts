@@ -19,7 +19,7 @@ import {
   ageBandOf, AGE_BAND_LABEL,
   type Appearance, type BirthInput,
 } from '../src/fortune';
-import { buildPrompt, EQUIPMENT, prefixTitleOf, POSTFIX_TITLE, toneReasonOf, appearanceReasonLines, hairLabelOf } from '../src/texts';
+import { buildPrompt, EQUIPMENT, prefixTitleOf, POSTFIX_TITLE, toneReasonOf, appearanceReasonLines, hairLabelOf, outfitTextOf } from '../src/texts';
 import { buildDisplayName } from '../src/name';
 
 const USAGE = `使い方: node scripts/make-prompt.mjs <ニックネーム> <YYYY-MM-DD> [--time HH:MM|unknown] [--appearance none|boy|girl]`;
@@ -99,7 +99,7 @@ function main(): void {
   const appearanceNote = appearance === 'none'
     ? APPEARANCE_LABEL[appearance]
     : `${APPEARANCE_LABEL[appearance]}（年齢区分：${AGE_BAND_LABEL[ageBand]}）`;
-  console.log(`職業：${TONE_LABEL[tone]}（最強の星・${chart.strongest}から自動決定：${toneReasonOf(chart.strongest)}）／見た目：${appearanceNote}／レア度：星${rarity.stars}（${GLAMOUR_LABEL[glamourTierOf(rarity.stars)]}）`);
+  console.log(`職業：${TONE_LABEL[tone]}（最強の星・${chart.strongest}から自動決定：${toneReasonOf(chart.strongest)}）／装い：${outfitTextOf(tone, spec).shortJa}／見た目：${appearanceNote}／レア度：星${rarity.stars}（${GLAMOUR_LABEL[glamourTierOf(rarity.stars)]}）`);
   console.log(`外見の理由：年齢感 ${appearanceReasons.ageLine}／体格 ${appearanceReasons.buildLine}／${hairLabelOf(spec.form)} ${appearanceReasons.hairLine}／顔の装飾 ${appearanceReasons.ornamentLine}`);
   console.log('');
   console.log('===== 呪文（英語プロンプト） =====');

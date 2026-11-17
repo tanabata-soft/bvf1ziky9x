@@ -173,7 +173,7 @@ export function fortuneBodyOf(chart: Chart, f: YearFortune): string[] {
 /** 解説つきシールに載せる情報一式（詳細画面の書き出しと一覧ビューアで共用する単一の生成処理） */
 export interface ExplainedTexts {
   personality: string[];
-  jobLine: string; // 職業（職業名＋短い理由）。v0.2.4 で追加（オーナー確定）
+  jobLine: string; // 職業（職業名＋短い理由＋装い）。v0.2.4 で追加、装いは v0.2.8
   appearanceLines: string[]; // 見た目（年齢感・体格・髪・顔の装飾＋それぞれの根拠）。v0.2.5 で追加、装飾は v0.2.6
   fortuneHeading: string;
   fortuneBody: string[];
@@ -189,7 +189,7 @@ export function explainedInfoOf(chart: Chart, year: number, ageBand: AgeBand = '
   const reasons = appearanceReasonLines(chart, spec, ageBand, appearance);
   return {
     personality: personalityTextsOf(chart),
-    jobLine: `${TONE_LABEL[tone]} ― 最強の星「${chart.strongest}」は${toneReasonOf(chart.strongest)}`,
+    jobLine: `${TONE_LABEL[tone]} ― 最強の星「${chart.strongest}」は${toneReasonOf(chart.strongest)}／装いは${outfitTextOf(tone, spec).shortJa}`,
     appearanceLines: [
       `年齢感：${reasons.ageLine}`,
       `体格：${reasons.buildLine}`,
@@ -367,6 +367,22 @@ export interface ToneInfo {
   ornamentSmallEn: string; // 頭にサブ装備があるときの、弱めた装飾の文（英語）
   ornamentSmallJa: string; // 弱めた装飾の日本語併記
   faceCover: FaceCover; // 顔立ち文との調整が要る覆い方
+  // 職業の装い（衣装）（v0.2.8、オーナー指示「せっかく職業があるので職業を強調して」）。
+  // 雰囲気文だけでは絵を見て職業が分かりにくいため、衣装として明確に定義し、
+  // "dressed unmistakably as a ..." の形で強く打ち出す。装備ルールが最優先で、
+  // 装いは装備の置き場所（体の前・腰・頭）を奪わない。顔の装飾と重なる要素
+  // （魔法使いの帽子、占い師のベール等）は装飾側に一本化し、装いには入れない。
+  outfitEn: string; // 職業の装い（衣装）の文（英語）
+  outfitJa: string; // 装いの日本語併記
+  outfitShortJa: string; // 設計欄・解説つきシールの職業の行に添える短い装い表現
+  // 職業の小道具（任意・1つまで）。背中に付ける物だけを対象にし、サブ装備が
+  // 腰・頭まで埋まっている命式（subEq が2つ）では小さい版に弱める（outfitTextOf）。
+  propEn?: string; // 小道具の文（英語・通常版）
+  propJa?: string; // 小道具の日本語（通常版。装いの文に足す形）
+  propShortJa?: string; // 小道具の短い日本語（通常版）
+  propSmallEn?: string; // 小道具の文（英語・小さい版）
+  propSmallJa?: string; // 小道具の日本語（小さい版）
+  propSmallShortJa?: string; // 小道具の短い日本語（小さい版）
 }
 export const TONE_INFO: Record<Tone, ToneInfo> = {
   knight: {
@@ -378,6 +394,9 @@ export const TONE_INFO: Record<Tone, ToneInfo> = {
     ornamentSmallEn: 'A tiny golden circlet charm is pinned at the side of the forehead.',
     ornamentSmallJa: '額の横に小さなサーカレットの飾り',
     faceCover: 'none',
+    outfitEn: 'The character is dressed unmistakably as a noble knight, in polished light armor-like attire with a flowing cape.',
+    outfitJa: '磨かれた軽い鎧風の装いと流れるマント',
+    outfitShortJa: '磨かれた軽い鎧風の装いとマント',
   },
   priest: {
     reason: '慈しみと守り、学びの星',
@@ -388,6 +407,9 @@ export const TONE_INFO: Record<Tone, ToneInfo> = {
     ornamentSmallEn: 'A small sheer veil ribbon is tied at the side of the head.',
     ornamentSmallJa: '頭の横に小さなベールのリボン',
     faceCover: 'veil',
+    outfitEn: 'The character is dressed unmistakably as a gentle priest, in calm ceremonial robes with a long stole draped over the shoulders.',
+    outfitJa: '穏やかな法衣と、肩にかけた長いストール',
+    outfitShortJa: '穏やかな法衣とストール',
   },
   merchant: {
     reason: '誠実に財を守り育てる星',
@@ -398,6 +420,9 @@ export const TONE_INFO: Record<Tone, ToneInfo> = {
     ornamentSmallEn: 'A small wrapped cloth band circles the head.',
     ornamentSmallJa: '小さな巻き布の帯',
     faceCover: 'none',
+    outfitEn: 'The character is dressed unmistakably as a wealthy merchant, in a rich, luxurious vest over neat clothes, with a gleaming pocket-watch chain across the vest.',
+    outfitJa: '豪華なベストと懐中時計のチェーンの、裕福な商人の装い',
+    outfitShortJa: '豪華なベストと懐中時計のチェーン',
   },
   bard: {
     reason: '生み出して楽しませる星',
@@ -408,6 +433,15 @@ export const TONE_INFO: Record<Tone, ToneInfo> = {
     ornamentSmallEn: 'A tiny feather pin is stuck at the side of the head.',
     ornamentSmallJa: '頭の横に小さな羽根の飾り',
     faceCover: 'none',
+    outfitEn: 'The character is dressed unmistakably as a traveling musician, in a colorful performer outfit with a short cape.',
+    outfitJa: '色鮮やかな旅の演奏家の衣装と短いケープ',
+    outfitShortJa: '色鮮やかな旅の演奏家の衣装',
+    propEn: 'A lute is strapped on its back.',
+    propJa: '背中にリュート',
+    propShortJa: 'リュート',
+    propSmallEn: 'A tiny lute-shaped charm dangles at the side of the outfit.',
+    propSmallJa: '小さなリュートのチャーム（サブ装備を優先して小さく）',
+    propSmallShortJa: '小さなリュートのチャーム',
   },
   fighter: {
     reason: '武器に頼らず自分の体で立つ、自立の星',
@@ -418,6 +452,9 @@ export const TONE_INFO: Record<Tone, ToneInfo> = {
     ornamentSmallEn: 'A thin headband cord is tied at the side of the forehead.',
     ornamentSmallJa: '細い鉢巻の紐を横で結ぶ',
     faceCover: 'none',
+    outfitEn: 'The character is dressed unmistakably as a martial artist, in a dogi-style training outfit with a tightly wrapped belt.',
+    outfitJa: '道着風の装いと、きりりと巻いた帯',
+    outfitShortJa: '道着風の装いと巻いた帯',
   },
   gladiator: {
     reason: '熱い勝負の星',
@@ -428,6 +465,9 @@ export const TONE_INFO: Record<Tone, ToneInfo> = {
     ornamentSmallEn: 'A small forehead guard plate is worn at the front of the head.',
     ornamentSmallJa: '小さな額当て',
     faceCover: 'none',
+    outfitEn: 'The character is dressed unmistakably as a gladiator, in light arena armor with a single shoulder guard.',
+    outfitJa: 'グラディエーター風の軽装鎧と片肩の肩当て',
+    outfitShortJa: 'グラディエーター風の軽装鎧',
   },
   mage: {
     reason: '型破りの才能と言葉の力',
@@ -438,6 +478,9 @@ export const TONE_INFO: Record<Tone, ToneInfo> = {
     ornamentSmallEn: 'A tiny pointed hat is perched at the side of the head.',
     ornamentSmallJa: '頭の横に小さなとんがり帽子',
     faceCover: 'none',
+    outfitEn: 'The character is dressed unmistakably as a wizard, in a flowing robe embroidered with stars and moons.',
+    outfitJa: '星と月の刺繍のローブ',
+    outfitShortJa: '星と月の刺繍のローブ',
   },
   rogue: {
     reason: '流れを読んで財を動かす星',
@@ -448,6 +491,9 @@ export const TONE_INFO: Record<Tone, ToneInfo> = {
     ornamentSmallEn: 'A cloth mask covers the nose and mouth, while the eyes and forehead stay visible and expressive.',
     ornamentSmallJa: '口元を覆うマスク（目元と額は見える。頭の装備を優先してフードはなし）',
     faceCover: 'mouth',
+    outfitEn: 'The character is dressed unmistakably as a nimble rogue, in light, quick-looking clothes with a short travel cloak and many small pockets.',
+    outfitJa: '身軽な装いと短い旅マント、小さなポケットがたくさん',
+    outfitShortJa: '身軽な装いと短い旅マント',
   },
   darkknight: {
     reason: '闘争の星',
@@ -458,6 +504,9 @@ export const TONE_INFO: Record<Tone, ToneInfo> = {
     ornamentSmallEn: 'A small black half mask covers only the mouth, so the eyes, nose and forehead stay visible.',
     ornamentSmallJa: '口元だけを覆う小さな黒いハーフマスク（目元と鼻・額は見える）',
     faceCover: 'mouth',
+    outfitEn: 'The character is dressed unmistakably as a dark knight, in black armor-like attire with a deep crimson cape.',
+    outfitJa: '黒い鎧風の装いと深紅のマント',
+    outfitShortJa: '黒い鎧風の装いと深紅のマント',
   },
   seer: {
     reason: 'ひらめきと神秘の星',
@@ -468,6 +517,9 @@ export const TONE_INFO: Record<Tone, ToneInfo> = {
     ornamentSmallEn: 'A small sheer veil ribbon hangs at the side of the head.',
     ornamentSmallJa: '頭の横に小さな透けるベールのリボン（頭の装備を優先してフードはなし）',
     faceCover: 'veil',
+    outfitEn: 'The character is dressed unmistakably as a fortune teller, in a mystical robe patterned with moons and stars.',
+    outfitJa: '月と星の模様の神秘的なローブ',
+    outfitShortJa: '月と星の模様の神秘的なローブ',
   },
 };
 
@@ -667,6 +719,41 @@ export function ornamentTextOf(tone: Tone, spec: CharacterSpec): OrnamentText {
   return weakened
     ? { en: info.ornamentSmallEn, ja: info.ornamentSmallJa, weakened }
     : { en: info.ornamentEn, ja: info.ornamentJa, weakened };
+}
+
+// ---------- 職業の装い（v0.2.8、オーナー指示） ----------
+// 職業は雰囲気文と顔の装飾だけでは絵から分かりにくいため、衣装として明確に
+// 定義し、呪文で "dressed unmistakably as a ..." と強く打ち出す。
+// 職業の小道具は背中に付ける1つまで（現在は吟遊詩人のリュートのみ）。
+// 装備ルールが最優先：サブ装備が腰・頭まで埋まっている命式（subEq が2つ）では、
+// 背中まわりに余裕がないものとして小道具を小さい版（チャーム）に弱める。
+export interface OutfitText {
+  en: string; // 呪文に入れる装いの文（小道具の文を含む）
+  ja: string; // 部品併記に使う日本語（小道具の状態を含む）
+  shortJa: string; // 設計欄・解説つきシールの職業の行に添える短い装い
+  propWeakened: boolean; // 小道具を小さい版に弱めたか（小道具のない職業では false）
+}
+
+/** その命式で使う職業の装い（職業から一意に決まる） */
+export function outfitTextOf(tone: Tone, spec: CharacterSpec): OutfitText {
+  const info = TONE_INFO[tone];
+  if (!info.propEn) {
+    return { en: info.outfitEn, ja: info.outfitJa, shortJa: info.outfitShortJa, propWeakened: false };
+  }
+  const weakened = spec.subEq.length >= 2;
+  return weakened
+    ? {
+        en: `${info.outfitEn} ${info.propSmallEn}`,
+        ja: `${info.outfitJa}、${info.propSmallJa}`,
+        shortJa: `${info.outfitShortJa}と${info.propSmallShortJa}`,
+        propWeakened: true,
+      }
+    : {
+        en: `${info.outfitEn} ${info.propEn}`,
+        ja: `${info.outfitJa}、${info.propJa}`,
+        shortJa: `${info.outfitShortJa}と${info.propShortJa}`,
+        propWeakened: false,
+      };
 }
 
 /** 年齢区分ごとの比率（人型・精霊型で男女指定のときだけ使う。他形態・指定なしは約2.5頭身のまま） */
@@ -883,6 +970,8 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
   const hair = hairTextOf(dayEl, spec.form, ageBand);
   // 顔の装飾は職業から常に入れる（v0.2.6）。頭にサブ装備が乗る命式では小さい版に弱める
   const ornament = ornamentTextOf(tone, spec);
+  // 職業の装い（衣装）は職業から常に入れ、強く打ち出す（v0.2.8）
+  const outfit = outfitTextOf(tone, spec);
   // 口元を覆うマスクの職業では、人型・精霊型の顔立ち文を目元中心の文に差し替える
   const faceExtra = appearance === 'none' ? null
     : TONE_INFO[tone].faceCover === 'mouth' && human
@@ -896,6 +985,7 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
     hair.en,
     ...(faceExtra ? [faceExtra] : []),
     ...(TONE_INFO[tone].moodEn ? [TONE_INFO[tone].moodEn] : []),
+    outfit.en,
     ornament.en,
     `It carries ${sizePhrase(spec.mainEq.sizeTier, main.en, true)}.`,
     ...(subs.length ? [`Also: ${subs.join(', and ')}.`] : []),
@@ -908,6 +998,7 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
     { label: '画角', value: '正方形（1:1）。キャラと背景が正方形の全面に広がる' },
     { label: '背景の派手さ（レア度）', value: SPARKLE_JA[tier] },
     { label: '職業', value: TONE_INFO[tone].moodJa },
+    { label: '装い（職業）', value: `${outfit.ja}（職業・${TONE_LABEL[tone]}から）` },
     { label: '顔の装飾（職業）', value: `${ornament.ja}（職業・${TONE_LABEL[tone]}から${ornament.weakened ? '。頭のサブ装備を優先して小さく' : ''}）` },
     { label: '見た目', value: appearanceJaOf(spec.form, appearance, ageBand) },
     { label: '体格（最強の五行）', value: `${build.ja}（最強の五行・${chart.strongestElement}）` },

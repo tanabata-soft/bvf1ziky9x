@@ -8,7 +8,7 @@ import { shareOrCopyText, type ShareOutcome } from './share';
 import {
   DAY_GAN_TEXT, STRONGEST_TEXT,
   EQUIPMENT, prefixTitleOf, POSTFIX_TITLE, ELEMENT_COLOR, buildPrompt, seasonOf, SEASON_JA,
-  fortuneBodyOf, explainedInfoOf, toneReasonOf, appearanceReasonLines, hairLabelOf,
+  fortuneBodyOf, explainedInfoOf, toneReasonOf, appearanceReasonLines, hairLabelOf, outfitTextOf,
 } from './texts';
 import { silhouetteSvg } from './silhouette';
 import { buildDisplayName } from './name';
@@ -333,7 +333,7 @@ function renderReading(person: Person, opts: ReadingOpts): string {
       <li><strong>紋章</strong>：年支「${spec.crestZhi}」の刺繍</li>
       <li><strong>背景の季節</strong>：月支から「${SEASON_JA[seasonOf(spec.seasonZhi)]}」</li>
       <li><strong>素の表情</strong>：日柱の十二運「${dayPillar.diShi}」</li>
-      <li><strong>職業</strong>：${TONE_LABEL[tone]} ― 最強の星『${chart.strongest}』は${jobBecause}ため。称号・呪文・シールの帯の色に反映されます</li>
+      <li><strong>職業</strong>：${TONE_LABEL[tone]} ― 最強の星『${chart.strongest}』は${jobBecause}ため。装いは${outfitTextOf(tone, spec).shortJa}。称号・呪文・シールの帯の色に反映されます</li>
       <li><strong>見た目の年齢感</strong>：${appearanceReasons.ageLine}。男の子・女の子の呪文に反映されます</li>
       <li><strong>体格</strong>：${appearanceReasons.buildLine}。呪文に反映されます</li>
       <li><strong>${hairLabelOf(spec.form)}</strong>：${appearanceReasons.hairLine}。呪文に反映されます</li>
