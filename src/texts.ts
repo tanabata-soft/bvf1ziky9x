@@ -347,35 +347,44 @@ const TONE_MOOD_JA: Record<Tone, string> = {
 
 // ネガティブプロンプトはトーンで出し分ける。通常は "dark mood" を禁止するが、
 // ダークヒーロー／ヴィランでは外し、代わりにホラー化だけを防ぐ語を入れる。
+// v0.2.2: 男の子・女の子（顔立ちを少しリアル寄りに寄せる見た目）では、本文の
+// 「slightly realistic」と打ち消し合うため単独の realistic を外す。
+// 写真化・3D化の禁止（photorealistic, photograph, 3d render）は残す。
 const NEGATIVE_BASE =
   'text, letters, words, alphabet, numbers, frame, border, logo, watermark, signature, realistic, photograph, 3d render, scary, landscape orientation, wide image, portrait orientation, vertical image, letterbox, pillarbox';
-export function negativePromptOf(tone: Tone): string {
+const NEGATIVE_BASE_FACE =
+  'text, letters, words, alphabet, numbers, frame, border, logo, watermark, signature, photorealistic, photograph, 3d render, scary, landscape orientation, wide image, portrait orientation, vertical image, letterbox, pillarbox';
+export function negativePromptOf(tone: Tone, appearance: Appearance = 'none'): string {
+  const base = appearance === 'none' ? NEGATIVE_BASE : NEGATIVE_BASE_FACE;
   return tone === 'normal'
-    ? `${NEGATIVE_BASE}, dark mood`
-    : `${NEGATIVE_BASE}, horror, grotesque, realistic violence, blood, creepy`;
+    ? `${base}, dark mood`
+    : `${base}, horror, grotesque, realistic violence, blood, creepy`;
 }
 
-// 見た目（指定なし／男の子／女の子）の呪文への反映（オーナー決定 2026-11-15、v0.1.9 訂正）。
+// 見た目（指定なし／男の子／女の子）の呪文への反映（オーナー決定 2026-11-15、v0.1.9 訂正、v0.2.2 改訂）。
 // 内部的には「男の子＝イケメンアイドルのような顔立ち」「女の子＝アイドルのような顔立ち」として扱う。
 // ただし「アイドル」は歌手・アイドル活動の要素ではなく顔立ちの印象のこと。
 // 呪文に入れるのは顔立ち（少しリアル寄りで整った顔立ち・瞳・眉・笑顔）と髪まわりだけで、
 // ステージ衣装・ヘッドセットマイク・星のアクセサリー等の歌手系の装備・小物は入れない。
 // 人型・精霊型ではキャラそのものを男の子／女の子として書き分ける。
+// v0.2.2: 実生成が「少年（子ども）」に見えたため、人型・精霊型の男の子・女の子は
+// small／little 等の幼さを出す語を外して「アイドルのような顔立ちの若者」に寄せ、
+// 顔立ちの描き込み（瞳・鼻筋・口元・肌の陰影）を強め、比率も約3頭身で少し大人びた指定にする。
 // 獣型・道具型・群体型では性別表現は付けず、顔まわりの小さな雰囲気の差だけにする
 // （小物は従来分＝女の子のリボンまで。新規の歌手系小物は足さない）。
 type AppearanceKey = Exclude<Appearance, 'none'>;
 const APPEARANCE_FORM_EN: Partial<Record<FormType, Record<AppearanceKey, string>>> = {
-  人型: { boy: 'a small boy character', girl: 'a cute little girl character' },
-  精霊型: { boy: 'a small boy fairy spirit character', girl: 'a cute little girl fairy spirit character' },
+  人型: { boy: 'a handsome young male character with an idol-like face', girl: 'a beautiful young female character with an idol-like face' },
+  精霊型: { boy: 'a handsome young male fairy spirit character with an idol-like face', girl: 'a beautiful young female fairy spirit character with an idol-like face' },
 };
 const APPEARANCE_EXTRA_EN: Record<FormType, Record<AppearanceKey, string>> = {
   人型: {
-    boy: 'Give him a handsome idol-like face: slightly realistic, well-defined facial features, sparkling clear eyes, strong neat eyebrows and a fresh, bright smile, with neat short hair.',
-    girl: 'Give her a cute idol-like face: slightly realistic, well-defined facial features, big sparkling eyes, long eyelashes and a bright, cheerful smile, with long silky hair and a ribbon hair accessory.',
+    boy: 'Give him a handsome idol-like face drawn with slightly realistic, well-defined facial features: large detailed eyes with clearly drawn irises and highlights, a visible nose bridge and well-shaped lips, and soft natural shading on the skin. He has neatly styled short hair, strong tidy eyebrows and a fresh, confident smile.',
+    girl: 'Give her a beautiful idol-like face drawn with slightly realistic, well-defined facial features: large detailed eyes with clearly drawn irises, highlights and long eyelashes, a visible nose bridge and well-shaped lips, and soft natural shading on the skin. She has long silky hair with a ribbon hair accessory and a bright, charming smile.',
   },
   精霊型: {
-    boy: 'Give him a handsome idol-like face: slightly realistic, well-defined facial features, sparkling clear eyes, strong neat eyebrows and a fresh, bright smile, with neat short hair.',
-    girl: 'Give her a cute idol-like face: slightly realistic, well-defined facial features, big sparkling eyes, long eyelashes and a bright, cheerful smile, with long silky hair and a ribbon hair accessory.',
+    boy: 'Give him a handsome idol-like face drawn with slightly realistic, well-defined facial features: large detailed eyes with clearly drawn irises and highlights, a visible nose bridge and well-shaped lips, and soft natural shading on the skin. He has neatly styled short hair, strong tidy eyebrows and a fresh, confident smile.',
+    girl: 'Give her a beautiful idol-like face drawn with slightly realistic, well-defined facial features: large detailed eyes with clearly drawn irises, highlights and long eyelashes, a visible nose bridge and well-shaped lips, and soft natural shading on the skin. She has long silky hair with a ribbon hair accessory and a bright, charming smile.',
   },
   獣型: {
     boy: 'Add only a small boyish touch around the face: strong neat eyebrows and sparkling clear eyes.',
@@ -391,8 +400,8 @@ const APPEARANCE_EXTRA_EN: Record<FormType, Record<AppearanceKey, string>> = {
   },
 };
 const APPEARANCE_JA: Record<FormType, Record<Appearance, string>> = {
-  人型: { none: '指定なし（AIにおまかせ）', boy: '男の子：イケメンアイドルのような顔立ち（少しリアル寄りで整った顔立ち・キラキラした瞳・凛々しい眉・爽やかな笑顔）と短い髪', girl: '女の子：アイドルのような顔立ち（少しリアル寄りで整った顔立ち・大きな瞳・まつ毛・明るい笑顔）と長い髪・リボン' },
-  精霊型: { none: '指定なし（AIにおまかせ）', boy: '男の子：イケメンアイドルのような顔立ち（少しリアル寄りで整った顔立ち・キラキラした瞳・凛々しい眉・爽やかな笑顔）と短い髪', girl: '女の子：アイドルのような顔立ち（少しリアル寄りで整った顔立ち・大きな瞳・まつ毛・明るい笑顔）と長い髪・リボン' },
+  人型: { none: '指定なし（AIにおまかせ）', boy: '男の子：アイドルのような顔立ちの若い男性（少しリアル寄りで整った顔立ち・描き込んだ瞳・鼻筋と口元・肌の自然な陰影）。約3頭身で少し大人びた比率、短い髪', girl: '女の子：アイドルのような顔立ちの若い女性（少しリアル寄りで整った顔立ち・描き込んだ瞳・まつ毛・鼻筋と口元・肌の自然な陰影）。約3頭身で少し大人びた比率、長い髪・リボン' },
+  精霊型: { none: '指定なし（AIにおまかせ）', boy: '男の子：アイドルのような顔立ちの若い男性（少しリアル寄りで整った顔立ち・描き込んだ瞳・鼻筋と口元・肌の自然な陰影）。約3頭身で少し大人びた比率、短い髪', girl: '女の子：アイドルのような顔立ちの若い女性（少しリアル寄りで整った顔立ち・描き込んだ瞳・まつ毛・鼻筋と口元・肌の自然な陰影）。約3頭身で少し大人びた比率、長い髪・リボン' },
   獣型: { none: '指定なし（AIにおまかせ）', boy: '男の子：凛々しい眉とキラキラした瞳の顔まわりだけ（無理な人型化はしない）', girl: '女の子：まつ毛と柔らかい表情、リボンの顔まわりだけ（無理な人型化はしない）' },
   道具型: { none: '指定なし（AIにおまかせ）', boy: '男の子：凛々しい眉とキラキラした瞳の顔まわりだけ（無理な人型化はしない）', girl: '女の子：まつ毛と柔らかい表情、リボンの顔まわりだけ（無理な人型化はしない）' },
   群体型: { none: '指定なし（AIにおまかせ）', boy: '男の子：凛々しい眉とキラキラした瞳の顔まわりだけ（無理な人型化はしない）', girl: '女の子：まつ毛と柔らかい表情、リボンの顔まわりだけ（無理な人型化はしない）' },
@@ -412,9 +421,14 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
   const formPhrase = appearance === 'none'
     ? FORM_EN[spec.form]
     : (APPEARANCE_FORM_EN[spec.form]?.[appearance] ?? FORM_EN[spec.form]);
+  // 人型・精霊型で男の子・女の子を指定したときだけ、少し大人びた比率にする（v0.2.2）
+  const matureProportions = appearance !== 'none' && (spec.form === '人型' || spec.form === '精霊型');
+  const proportions = matureProportions
+    ? 'about 3 heads tall, with slightly more mature proportions'
+    : 'about 2.5 heads tall';
   const lines = [
     'Square image, 1:1 aspect ratio. The character and the sparkling background fill the entire square canvas from edge to edge.',
-    `A chibi character sticker illustration in the style of 1980s Japanese sparkling prize stickers. Super-deformed, about 2.5 heads tall, bold outlines, vivid colors, ${SPARKLE_EN[tier]}.`,
+    `A chibi character sticker illustration in the style of 1980s Japanese sparkling prize stickers. Super-deformed, ${proportions}, bold outlines, vivid colors, ${SPARKLE_EN[tier]}.`,
     `The character is ${formPhrase}, ${BODY_EN[chart.dayGan]}, with ${expr}.`,
     ...(appearance === 'none' ? [] : [APPEARANCE_EXTRA_EN[spec.form][appearance]]),
     ...(TONE_MOOD_EN[tone] ? [TONE_MOOD_EN[tone]] : []),
@@ -445,7 +459,7 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
   ];
   return {
     prompt: lines.join('\n'),
-    negative: negativePromptOf(tone),
+    negative: negativePromptOf(tone, appearance),
     partsJa,
   };
 }
