@@ -182,11 +182,11 @@ export interface ExplainedTexts {
   mainColor: Element;
 }
 
-export function explainedInfoOf(chart: Chart, year: number, ageBand: AgeBand = 'youth', appearance: Appearance = 'none'): ExplainedTexts {
+export function explainedInfoOf(chart: Chart, year: number, ageBand: AgeBand = 'youth'): ExplainedTexts {
   const spec = decideCharacter(chart);
   const f = yearFortune(chart, year);
   const tone = toneOfChart(chart);
-  const reasons = appearanceReasonLines(chart, spec, ageBand, appearance);
+  const reasons = appearanceReasonLines(chart, spec, ageBand);
   return {
     personality: personalityTextsOf(chart),
     jobLine: `${TONE_LABEL[tone]} ― 最強の星「${chart.strongest}」は${toneReasonOf(chart.strongest)}／装いは${outfitTextOf(tone, spec).shortJa}`,
@@ -572,6 +572,8 @@ export function negativePromptOf(tone: Tone, appearance: Appearance = 'none', ag
 // ヒゲは身だしなみとして許容するが、付けない形を基本にする）。円熟の髪の銀色は
 // シルバーフォックスの魅力として活かす（白髪だらけにはしない）。
 // 女の子・青年以下・指定なしは変更しない。
+// なお「イケオジ風」という言葉は外見の理由文（年齢感の行）には出さない
+// （v0.2.9、オーナー指示「イケオジ風の説明はいらない」）。呪文側の表現だけに使う。
 type AppearanceKey = Exclude<Appearance, 'none'>;
 type HumanForm = '人型' | '精霊型';
 
@@ -925,18 +927,14 @@ export interface AppearanceReasons {
  * 外見が「なぜそうなったか」の理由文（年齢区分・体格・髪・顔の装飾）。
  * 詳細画面の「分身キャラの設計」と解説つきシールで共用し、表示箇所でずれないようにする。
  */
-export function appearanceReasonLines(chart: Chart, spec: CharacterSpec, band: AgeBand, appearance: Appearance = 'none'): AppearanceReasons {
+export function appearanceReasonLines(chart: Chart, spec: CharacterSpec, band: AgeBand): AppearanceReasons {
   const build = buildTextOf(chart.strongestElement, spec.form);
   const dayEl = GAN_ELEMENT[chart.dayGan];
   const hair = hairTextOf(dayEl, spec.form, band);
   const tone = toneOfChart(chart);
   const ornament = ornamentTextOf(tone, spec);
-  // 男の子の中年・円熟はイケオジ風（洗練された大人の男性）で表す（v0.2.7、オーナー指示）
-  const ikeoji = appearance === 'boy' && (band === 'middle' || band === 'mature');
   return {
-    ageLine: ikeoji
-      ? `${AGE_BAND_LABEL[band]} ― 年齢の区分（${AGE_BAND_RANGE[band]}）から、イケオジ風（洗練された大人の男性）で表す`
-      : `${AGE_BAND_LABEL[band]} ― 年齢の区分（${AGE_BAND_RANGE[band]}）から`,
+    ageLine: `${AGE_BAND_LABEL[band]} ― 年齢の区分（${AGE_BAND_RANGE[band]}）から`,
     buildLine: `${build.ja} ― いちばん強い五行『${chart.strongestElement}』の性質から`,
     hairLine: `${hair.ja} ― 日干『${chart.dayGan}』（${dayEl}）の性質から`,
     ornamentLine: `${ornament.ja} ― 職業『${TONE_LABEL[tone]}』から${ornament.weakened ? '（頭のサブ装備を優先して小さく）' : ''}`,

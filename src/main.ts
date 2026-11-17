@@ -246,7 +246,7 @@ function renderReading(person: Person, opts: ReadingOpts): string {
   const dn = displayName(person.nickname, chart, opts.showPostfix);
   // 年齢区分は生年月日から今日の年齢で決まる（v0.2.5）。見た目の年齢感にだけ効く
   const ageBand = ageBandOf(person.birth);
-  const appearanceReasons = appearanceReasonLines(chart, spec, ageBand, opts.appearance);
+  const appearanceReasons = appearanceReasonLines(chart, spec, ageBand);
   const prompt = buildPrompt(chart, spec, rarity.stars, tone, opts.appearance, ageBand);
   const tier = glamourTierOf(rarity.stars);
   const now = new Date();
@@ -375,10 +375,10 @@ function renderReading(person: Person, opts: ReadingOpts): string {
  * 解説つきシールの生成（詳細画面の書き出しと、シール帳のビューアで共用）。
  * 文面は texts.ts の explainedInfoOf（単一の生成処理）から作るので、表示箇所でずれない。
  */
-async function buildExplainedDataUrl(person: Person, sealImage: string, appearance: Appearance = 'none'): Promise<string> {
+async function buildExplainedDataUrl(person: Person, sealImage: string): Promise<string> {
   const chart = computeChart(person.birth);
   const sealImg = await loadImageFromUrl(sealImage);
-  const canvas = composeExplainedSeal(sealImg, explainedInfoOf(chart, new Date().getFullYear(), ageBandOf(person.birth), appearance));
+  const canvas = composeExplainedSeal(sealImg, explainedInfoOf(chart, new Date().getFullYear(), ageBandOf(person.birth)));
   return canvasToDataUrl(canvas);
 }
 
@@ -461,7 +461,7 @@ function bindReading(person: Person, opts: ReadingOpts) {
     const btn = ev.currentTarget as HTMLButtonElement;
     const msg = app.querySelector('#registerMsg');
     const ok = await withButtonFeedback(btn, '解説つき画像を作っています…', '書き出しました ✓', async () => {
-      const dataUrl = await buildExplainedDataUrl(person, opts.image!, opts.appearance);
+      const dataUrl = await buildExplainedDataUrl(person, opts.image!);
       await exportSeal(dataUrl, `seal-explained-${person.nickname}.jpg`);
     });
     if (!ok && msg) {
@@ -824,7 +824,7 @@ async function openExplainedViewer(entry: Entry) {
     birth: { y: entry.y, m: entry.m, d: entry.d, hour: entry.hour, minute: entry.minute },
   };
   try {
-    const dataUrl = await buildExplainedDataUrl(person, entry.image!, entry.appearance ?? 'none');
+    const dataUrl = await buildExplainedDataUrl(person, entry.image!);
     if (!document.body.contains(overlay)) return; // 生成中に閉じられた
     body.innerHTML = `<img src="${dataUrl}" alt="解説つきシール">`;
     exportBtn.disabled = false;

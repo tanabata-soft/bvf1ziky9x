@@ -97,24 +97,19 @@ describe('イケオジ風（男の子×中年・円熟）', () => {
     expect(m.prompt).toContain('silver-fox gentleman');
   });
 
-  it('外見の理由：年齢感の行にイケオジ風の根拠が入る（男の子×中年・円熟のみ）', () => {
-    const mid = appearanceReasonLines(chart, spec, 'middle', 'boy');
-    expect(mid.ageLine).toContain('中年');
-    expect(mid.ageLine).toContain('40〜59歳');
-    expect(mid.ageLine).toContain('イケオジ風（洗練された大人の男性）');
-    const mat = appearanceReasonLines(chart, spec, 'mature', 'boy');
-    expect(mat.ageLine).toContain('円熟');
-    expect(mat.ageLine).toContain('イケオジ風');
-    // 女の子・青年・指定なし（引数省略含む）では入らない
-    expect(appearanceReasonLines(chart, spec, 'middle', 'girl').ageLine).not.toContain('イケオジ');
-    expect(appearanceReasonLines(chart, spec, 'adult', 'boy').ageLine).not.toContain('イケオジ');
-    expect(appearanceReasonLines(chart, spec, 'middle').ageLine).not.toContain('イケオジ');
+  it('外見の理由：年齢感の行にイケオジ風の説明は出さない（v0.2.9、オーナー指示）', () => {
+    // 呪文側のイケオジ表現は維持するが、理由文は従来どおり区分の根拠だけにする
+    const mid = appearanceReasonLines(chart, spec, 'middle');
+    expect(mid.ageLine).toBe('中年 ― 年齢の区分（40〜59歳）から');
+    const mat = appearanceReasonLines(chart, spec, 'mature');
+    expect(mat.ageLine).toBe('円熟 ― 年齢の区分（60歳以上）から');
+    expect(mid.ageLine).not.toContain('イケオジ');
+    expect(mat.ageLine).not.toContain('イケオジ');
   });
 
-  it('解説つきシールの「見た目」節にもイケオジ風の根拠が入る', () => {
-    const info = explainedInfoOf(chart, 2026, 'middle', 'boy');
-    expect(info.appearanceLines[0]).toContain('イケオジ風');
-    const plain = explainedInfoOf(chart, 2026, 'middle');
-    expect(plain.appearanceLines[0]).not.toContain('イケオジ');
+  it('解説つきシールの「見た目」節にもイケオジ風の説明は出さない', () => {
+    const info = explainedInfoOf(chart, 2026, 'middle');
+    expect(info.appearanceLines[0]).toContain('中年 ― 年齢の区分（40〜59歳）から');
+    expect(info.appearanceLines[0]).not.toContain('イケオジ');
   });
 });
