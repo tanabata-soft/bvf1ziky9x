@@ -80,7 +80,7 @@ function main(): void {
   const displayName = buildDisplayName(prefix, nickname, '');
   // 年齢区分は生年月日から今日の年齢で決まる（アプリと同じルール、v0.2.5）
   const ageBand = ageBandOf(birth);
-  const appearanceReasons = appearanceReasonLines(chart, spec, ageBand);
+  const appearanceReasons = appearanceReasonLines(chart, spec, ageBand, appearance);
   const prompt = buildPrompt(chart, spec, rarity.stars, tone, appearance, ageBand);
 
   const pillarLine = chart.pillars.map((p) => `${p.label} ${p.gz}`).join('／');

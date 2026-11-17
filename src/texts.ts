@@ -182,11 +182,11 @@ export interface ExplainedTexts {
   mainColor: Element;
 }
 
-export function explainedInfoOf(chart: Chart, year: number, ageBand: AgeBand = 'youth'): ExplainedTexts {
+export function explainedInfoOf(chart: Chart, year: number, ageBand: AgeBand = 'youth', appearance: Appearance = 'none'): ExplainedTexts {
   const spec = decideCharacter(chart);
   const f = yearFortune(chart, year);
   const tone = toneOfChart(chart);
-  const reasons = appearanceReasonLines(chart, spec, ageBand);
+  const reasons = appearanceReasonLines(chart, spec, ageBand, appearance);
   return {
     personality: personalityTextsOf(chart),
     jobLine: `${TONE_LABEL[tone]} ― 最強の星「${chart.strongest}」は${toneReasonOf(chart.strongest)}`,
@@ -485,11 +485,17 @@ const NEGATIVE_BASE =
   'text, letters, words, alphabet, numbers, frame, border, logo, watermark, signature, realistic, photograph, 3d render, scary, landscape orientation, wide image, portrait orientation, vertical image, letterbox, pillarbox';
 const NEGATIVE_BASE_FACE =
   'text, letters, words, alphabet, numbers, frame, border, logo, watermark, signature, photorealistic, photograph, 3d render, scary, landscape orientation, wide image, portrait orientation, vertical image, letterbox, pillarbox';
-export function negativePromptOf(tone: Tone, appearance: Appearance = 'none'): string {
+// v0.2.7: 男の子の中年・円熟（イケオジ風）では、生成が老人化しないよう
+// 長いヒゲ・白いヒゲを禁止する。短く整えたヒゲは身だしなみとして許容するので、
+// ヒゲそのもの（beard）ではなく「長い／白い／ぼさぼさ」の形だけを禁止する。
+const NEGATIVE_BEARD_IKEOJI = 'long beard, white beard, bushy beard, unkempt beard';
+export function negativePromptOf(tone: Tone, appearance: Appearance = 'none', ageBand: AgeBand = 'youth'): string {
   const base = appearance === 'none' ? NEGATIVE_BASE : NEGATIVE_BASE_FACE;
-  return DARK_TONES.includes(tone)
-    ? `${base}, horror, grotesque, realistic violence, blood, creepy`
-    : `${base}, dark mood`;
+  const tonePart = DARK_TONES.includes(tone)
+    ? 'horror, grotesque, realistic violence, blood, creepy'
+    : 'dark mood';
+  const ikeoji = appearance === 'boy' && (ageBand === 'middle' || ageBand === 'mature');
+  return ikeoji ? `${base}, ${tonePart}, ${NEGATIVE_BEARD_IKEOJI}` : `${base}, ${tonePart}`;
 }
 
 // 見た目（指定なし／男の子／女の子）の呪文への反映（オーナー決定 2026-11-15、v0.1.9 訂正、v0.2.2 改訂）。
@@ -507,6 +513,13 @@ export function negativePromptOf(tone: Tone, appearance: Appearance = 'none'): s
 // 区分は生年月日から生成時点の年齢で決まり（fortune.ts の ageBandOf）、利用者は選べない。
 // 若者の表現は v0.2.2〜v0.2.4 のものをそのまま使う（見本の維持）。
 // 中年は老けさせすぎず、円熟は貫禄と穏やかさで表し、老いの強調（しわ・弱々しさ）はしない。
+// v0.2.7: 男の子の中年・円熟は「イケオジ風」にする（オーナー指示）。
+// 実生成で白い長いヒゲの老人寄りになった指摘への対応。イケオジ＝スタイリッシュで
+// 洗練された魅力的な大人の男性。身だしなみが整い、凛々しく、余裕のある笑顔と自信。
+// 「老け」とは切り分け、長いヒゲ・白いヒゲはネガティブでも禁止する（短く整えた
+// ヒゲは身だしなみとして許容するが、付けない形を基本にする）。円熟の髪の銀色は
+// シルバーフォックスの魅力として活かす（白髪だらけにはしない）。
+// 女の子・青年以下・指定なしは変更しない。
 type AppearanceKey = Exclude<Appearance, 'none'>;
 type HumanForm = '人型' | '精霊型';
 
@@ -516,15 +529,15 @@ const AGE_FORM_EN: Record<HumanForm, Record<AgeBand, Record<AppearanceKey, strin
     child: { boy: 'a cheerful little boy character', girl: 'a cheerful little girl character' },
     youth: { boy: 'a handsome young male character with an idol-like face', girl: 'a beautiful young female character with an idol-like face' },
     adult: { boy: 'a handsome adult man character with a refined, grown-up face', girl: 'a beautiful adult woman character with a refined, grown-up face' },
-    middle: { boy: 'a dignified middle-aged man character with calm mature charm', girl: 'a dignified middle-aged woman character with calm mature charm' },
-    mature: { boy: 'a dignified mature man character with serene gravitas and warm charm, still vibrant and full of life', girl: 'a dignified mature woman character with serene gravitas and warm charm, still vibrant and full of life' },
+    middle: { boy: 'a dignified middle-aged man character with calm mature charm, stylish and dashing like a handsome, impeccably groomed gentleman in his prime', girl: 'a dignified middle-aged woman character with calm mature charm' },
+    mature: { boy: 'a dignified mature man character with serene gravitas and warm charm, an elegant silver-fox gentleman, stylish and impeccably groomed, still vibrant and full of life', girl: 'a dignified mature woman character with serene gravitas and warm charm, still vibrant and full of life' },
   },
   精霊型: {
     child: { boy: 'a cheerful little boy fairy spirit character', girl: 'a cheerful little girl fairy spirit character' },
     youth: { boy: 'a handsome young male fairy spirit character with an idol-like face', girl: 'a beautiful young female fairy spirit character with an idol-like face' },
     adult: { boy: 'a handsome adult man fairy spirit character with a refined, grown-up face', girl: 'a beautiful adult woman fairy spirit character with a refined, grown-up face' },
-    middle: { boy: 'a dignified middle-aged man fairy spirit character with calm mature charm', girl: 'a dignified middle-aged woman fairy spirit character with calm mature charm' },
-    mature: { boy: 'a dignified mature man fairy spirit character with serene gravitas and warm charm, still vibrant and full of life', girl: 'a dignified mature woman fairy spirit character with serene gravitas and warm charm, still vibrant and full of life' },
+    middle: { boy: 'a dignified middle-aged man fairy spirit character with calm mature charm, stylish and dashing like a handsome, impeccably groomed gentleman in his prime', girl: 'a dignified middle-aged woman fairy spirit character with calm mature charm' },
+    mature: { boy: 'a dignified mature man fairy spirit character with serene gravitas and warm charm, an elegant silver-fox gentleman, stylish and impeccably groomed, still vibrant and full of life', girl: 'a dignified mature woman fairy spirit character with serene gravitas and warm charm, still vibrant and full of life' },
   },
 };
 
@@ -543,11 +556,11 @@ const AGE_EXTRA_HUMAN_EN: Record<AgeBand, Record<AppearanceKey, string>> = {
     girl: 'Give her a beautiful, grown-up face drawn with slightly realistic, well-defined facial features: deep detailed eyes with clearly drawn irises, highlights and long eyelashes, a defined nose bridge and well-shaped lips, and soft natural shading on the skin. She has a calm, graceful smile and wears a ribbon hair accessory.',
   },
   middle: {
-    boy: 'Give him a distinguished face with calm mature charm, drawn with slightly realistic, well-defined facial features: steady detailed eyes with clearly drawn irises and highlights, a defined nose bridge and well-shaped lips, and soft natural shading on the skin. He has strong tidy eyebrows and a composed, reassuring smile. Keep him vibrant and handsome, never aged or weary.',
+    boy: 'Give him the face of a stylish, dashing gentleman in his prime — an attractive, well-groomed man with the polished charm of a handsome "ikeoji" — drawn with slightly realistic, well-defined facial features: steady, confident eyes with clearly drawn irises and highlights, a defined nose bridge and well-shaped lips, and smooth skin with soft natural shading. He is impeccably groomed and clean-shaven, with at most a very short, neatly trimmed stubble — never a long beard. He has strong tidy eyebrows and a relaxed, confident, reassuring smile. Keep him vibrant and handsome, never aged or weary.',
     girl: 'Give her a distinguished face with calm mature charm, drawn with slightly realistic, well-defined facial features: steady detailed eyes with clearly drawn irises, highlights and long eyelashes, a defined nose bridge and well-shaped lips, and soft natural shading on the skin. She has a composed, warm smile and wears a ribbon hair accessory. Keep her vibrant and beautiful, never aged or weary.',
   },
   mature: {
-    boy: 'Give him a serene, dignified face with the warm gravitas of seasoned years, drawn with slightly realistic, well-defined facial features: calm detailed eyes with clearly drawn irises and highlights, a defined nose bridge and well-shaped lips, and soft natural shading on the skin. He has a gentle, composed smile. Keep him vibrant and full of life, with smooth healthy skin and a strong, lively presence.',
+    boy: 'Give him the serene, dignified face of an elegant silver-fox gentleman — stylish, well-groomed and full of the warm gravitas of seasoned years — drawn with slightly realistic, well-defined facial features: calm, confident eyes with clearly drawn irises and highlights, a defined nose bridge and well-shaped lips, and soft natural shading on the skin. He is impeccably groomed and clean-shaven, with at most a very short, neatly trimmed stubble — never a long beard. He has a gentle, composed, self-assured smile. Keep him vibrant and full of life, with smooth healthy skin and a strong, lively presence.',
     girl: 'Give her a serene, dignified face with the warm gravitas of seasoned years, drawn with slightly realistic, well-defined facial features: calm detailed eyes with clearly drawn irises, highlights and long eyelashes, a defined nose bridge and well-shaped lips, and soft natural shading on the skin. She has a gentle, composed smile and wears a ribbon hair accessory. Keep her vibrant and full of life, with smooth healthy skin and a strong, lively presence.',
   },
 };
@@ -567,11 +580,11 @@ const AGE_EXTRA_SINGLE_EN: Record<AgeBand, Record<AppearanceKey, string>> = {
     girl: 'Add only a small feminine touch around the face: graceful eyelashes, a composed gentle expression, and a cute ribbon.',
   },
   middle: {
-    boy: 'Add only a small masculine touch around the face: steady eyebrows and calm, dignified eyes.',
+    boy: 'Add only a small masculine touch around the face: well-groomed steady eyebrows and calm, dashing, confident eyes with a stylish mature charm.',
     girl: 'Add only a small feminine touch around the face: soft eyelashes, a serene gentle expression, and a cute ribbon.',
   },
   mature: {
-    boy: 'Add only a small masculine touch around the face: serene, dignified eyes and a calm, warm expression.',
+    boy: 'Add only a small masculine touch around the face: serene, dignified eyes and the calm, stylish, warm expression of an elegant silver-fox gentleman.',
     girl: 'Add only a small feminine touch around the face: soft eyelashes, a serene, warm expression, and a cute ribbon.',
   },
 };
@@ -589,11 +602,11 @@ const AGE_EXTRA_MULTI_EN: Record<AgeBand, Record<AppearanceKey, string>> = {
     girl: 'Add only a small feminine touch around the faces: graceful eyelashes, composed gentle expressions, and cute ribbons.',
   },
   middle: {
-    boy: 'Add only a small masculine touch around the faces: steady eyebrows and calm, dignified eyes.',
+    boy: 'Add only a small masculine touch around the faces: well-groomed steady eyebrows and calm, dashing, confident eyes with a stylish mature charm.',
     girl: 'Add only a small feminine touch around the faces: soft eyelashes, serene gentle expressions, and cute ribbons.',
   },
   mature: {
-    boy: 'Add only a small masculine touch around the faces: serene, dignified eyes and calm, warm expressions.',
+    boy: 'Add only a small masculine touch around the faces: serene, dignified eyes and calm, stylish, warm expressions.',
     girl: 'Add only a small feminine touch around the faces: soft eyelashes, serene, warm expressions, and cute ribbons.',
   },
 };
@@ -629,11 +642,11 @@ const AGE_EXTRA_MASKED_EN: Record<AgeBand, Record<AppearanceKey, string>> = {
     girl: 'Above the mask, her eyes and forehead stay fully visible: deep detailed eyes with clearly drawn irises, highlights and long eyelashes, and a calm, graceful gaze. She wears a ribbon hair accessory.',
   },
   middle: {
-    boy: 'Above the mask, his eyes and forehead stay fully visible: steady detailed eyes with clearly drawn irises and highlights, strong tidy eyebrows, and a composed, reassuring gaze. Keep him vibrant and handsome, never aged or weary.',
+    boy: 'Above the mask, his eyes and forehead stay fully visible: steady, dashing eyes with clearly drawn irises and highlights, strong tidy eyebrows, and the relaxed, confident gaze of a stylish, impeccably groomed gentleman in his prime. Keep him vibrant and handsome, never aged or weary.',
     girl: 'Above the mask, her eyes and forehead stay fully visible: steady detailed eyes with clearly drawn irises, highlights and long eyelashes, and a composed, warm gaze. She wears a ribbon hair accessory. Keep her vibrant and beautiful, never aged or weary.',
   },
   mature: {
-    boy: 'Above the mask, his eyes and forehead stay fully visible: calm detailed eyes with clearly drawn irises and highlights, and a gentle, composed gaze full of warm gravitas. Keep him vibrant and full of life.',
+    boy: 'Above the mask, his eyes and forehead stay fully visible: calm, dashing eyes with clearly drawn irises and highlights, and the gentle, confident gaze of an elegant, impeccably groomed silver-fox gentleman, full of warm gravitas. Keep him vibrant and full of life.',
     girl: 'Above the mask, her eyes and forehead stay fully visible: calm detailed eyes with clearly drawn irises, highlights and long eyelashes, and a gentle, composed gaze full of warm gravitas. She wears a ribbon hair accessory. Keep her vibrant and full of life.',
   },
 };
@@ -680,11 +693,11 @@ const AGE_JA_HUMAN: Record<AgeBand, Record<AppearanceKey, string>> = {
     girl: '大人の女性として描く（少しリアル寄りで整った大人の顔立ち・落ち着いた優美な笑顔、リボン）。約3.5頭身で大人びた比率',
   },
   middle: {
-    boy: '円熟した大人の魅力のある男性（落ち着いた顔立ちと佇まい。老けさせすぎない）。約3.5頭身で大人びた比率',
+    boy: 'イケオジ風の大人の男性（スタイリッシュで洗練された魅力、身だしなみが整い、凛々しく余裕のある笑顔。長いヒゲ・白いヒゲは付けず、老けさせない）。約3.5頭身で大人びた比率',
     girl: '円熟した大人の魅力のある女性（落ち着いた顔立ちと佇まい。老けさせすぎない、リボン）。約3.5頭身で大人びた比率',
   },
   mature: {
-    boy: '貫禄と穏やかさのある円熟した大人（老いは強調しない。髪に少し銀色が混じる程度）。約3.5頭身で大人びた比率',
+    boy: 'イケオジ風の円熟した男性（シルバーフォックスのような洗練された魅力と貫禄、穏やかさ。老いは強調しない。髪に少し銀色が混じる程度で白髪だらけにしない）。約3.5頭身で大人びた比率',
     girl: '貫禄と穏やかさのある円熟した大人（老いは強調しない。髪に少し銀色が混じる程度、リボン）。約3.5頭身で大人びた比率',
   },
 };
@@ -703,11 +716,11 @@ const AGE_JA_OTHER: Record<AgeBand, Record<AppearanceKey, string>> = {
     girl: 'まつ毛と落ち着いた柔らかい表情、リボンの顔まわりだけ（無理な人型化はしない）',
   },
   middle: {
-    boy: '穏やかで凛々しい眉と落ち着いた瞳の顔まわりだけ（無理な人型化はしない）',
+    boy: '穏やかで凛々しい眉と、イケオジ風の余裕ある瞳の顔まわりだけ（無理な人型化はしない）',
     girl: 'まつ毛と穏やかで柔らかい表情、リボンの顔まわりだけ（無理な人型化はしない）',
   },
   mature: {
-    boy: '穏やかで貫禄のある瞳と温かい表情の顔まわりだけ（無理な人型化はしない）',
+    boy: '穏やかで貫禄のある瞳と、イケオジ風の温かく洗練された表情の顔まわりだけ（無理な人型化はしない）',
     girl: 'まつ毛と穏やかで温かい表情、リボンの顔まわりだけ（無理な人型化はしない）',
   },
 };
@@ -825,14 +838,18 @@ export interface AppearanceReasons {
  * 外見が「なぜそうなったか」の理由文（年齢区分・体格・髪・顔の装飾）。
  * 詳細画面の「分身キャラの設計」と解説つきシールで共用し、表示箇所でずれないようにする。
  */
-export function appearanceReasonLines(chart: Chart, spec: CharacterSpec, band: AgeBand): AppearanceReasons {
+export function appearanceReasonLines(chart: Chart, spec: CharacterSpec, band: AgeBand, appearance: Appearance = 'none'): AppearanceReasons {
   const build = buildTextOf(chart.strongestElement, spec.form);
   const dayEl = GAN_ELEMENT[chart.dayGan];
   const hair = hairTextOf(dayEl, spec.form, band);
   const tone = toneOfChart(chart);
   const ornament = ornamentTextOf(tone, spec);
+  // 男の子の中年・円熟はイケオジ風（洗練された大人の男性）で表す（v0.2.7、オーナー指示）
+  const ikeoji = appearance === 'boy' && (band === 'middle' || band === 'mature');
   return {
-    ageLine: `${AGE_BAND_LABEL[band]} ― 年齢の区分（${AGE_BAND_RANGE[band]}）から`,
+    ageLine: ikeoji
+      ? `${AGE_BAND_LABEL[band]} ― 年齢の区分（${AGE_BAND_RANGE[band]}）から、イケオジ風（洗練された大人の男性）で表す`
+      : `${AGE_BAND_LABEL[band]} ― 年齢の区分（${AGE_BAND_RANGE[band]}）から`,
     buildLine: `${build.ja} ― いちばん強い五行『${chart.strongestElement}』の性質から`,
     hairLine: `${hair.ja} ― 日干『${chart.dayGan}』（${dayEl}）の性質から`,
     ornamentLine: `${ornament.ja} ― 職業『${TONE_LABEL[tone]}』から${ornament.weakened ? '（頭のサブ装備を優先して小さく）' : ''}`,
@@ -910,7 +927,7 @@ export function buildPrompt(chart: Chart, spec: CharacterSpec, stars = 3, tone: 
   ];
   return {
     prompt: lines.join('\n'),
-    negative: negativePromptOf(tone, appearance),
+    negative: negativePromptOf(tone, appearance, ageBand),
     partsJa,
   };
 }

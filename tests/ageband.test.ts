@@ -300,8 +300,8 @@ describe('外見の理由の説明（設計欄と解説つきシールで共用�
     expect(mainSrc).toContain('ageBandOf');
     expect(mainSrc).toContain('<strong>見た目の年齢感</strong>');
     expect(mainSrc).toContain('<strong>体格</strong>');
-    // 解説つきシールの生成でも年齢区分を渡す
-    expect(mainSrc).toContain('explainedInfoOf(chart, new Date().getFullYear(), ageBandOf(person.birth))');
+    // 解説つきシールの生成でも年齢区分と見た目を渡す
+    expect(mainSrc).toContain('explainedInfoOf(chart, new Date().getFullYear(), ageBandOf(person.birth), appearance)');
   });
 
   it('解説つきシール（seal.ts）に「見た目」の節がある', () => {
